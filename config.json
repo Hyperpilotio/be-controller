@@ -1,0 +1,19 @@
+{
+    "mode" : "k8s",
+    "ctlloc" : "out",
+    "default_class": "HP",
+    "period": 5,
+    "slack_threshold_shrink": 0.05,
+    "slack_threshold_grow": 0.1,
+    "load_threshold_shrink": 130.0,
+    "load_threshold_grow": 100.0,
+    "min_shares": 2,
+    "BE_growth_rate": 1.1,
+    "BE_shrink_rate": 0.9,
+    "net_period": 2,
+    "iface_ext": "ens3",
+    "iface_cont": "weave",
+    "link_bw_mbps" : 10000,
+    "max_bw_mbps" : 700
+}
+
