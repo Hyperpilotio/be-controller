@@ -29,7 +29,8 @@ def NetControll():
     print "Starting NetControl (%s, %s, %f, %f)" \
            % (st.params['iface_ext'], st.params['iface_cont'], st.params['max_bw_mbps'], st.params['link_bw_mbps'])
   net = netclass.NetClass(st.params['iface_ext'], st.params['iface_cont'], \
-                          st.params['max_bw_mbps'], st.params['link_bw_mbps'])
+                          st.params['max_bw_mbps'], st.params['link_bw_mbps'], \
+                          st.params['ctlloc'])
   period = st.params['net_period']
   cycle = 0
   # control loop
@@ -50,7 +51,7 @@ def NetControll():
 
     # actual controller
     bw_usage = net.getBwStats()
-    if 1 in bw_usage and 10 in bw_usage: 
+    if 1 in bw_usage and 10 in bw_usage:
       total_bw = bw_usage[1]
       hp_bw = bw_usage[1] - bw_usage[10]
       if hp_bw < 0.0:

@@ -29,13 +29,13 @@ class NetClass(object):
       - Common iptables commands
         http://www.thegeekstuff.com/2011/06/iptables-rules-examples
   """
-  def __init__(self, iface_ext, iface_cont, max_bw_mbps, link_bw_mbps):
+  def __init__(self, iface_ext, iface_cont, max_bw_mbps, link_bw_mbps, ctlloc):
     self.iface_ext = iface_ext
     self.iface_cont = iface_cont
     self.max_bw_mbps = max_bw_mbps
     self.link_bw_mbps = link_bw_mbps
     self.cont_ips = set()
-    self.cc = cc.CommandClient()
+    self.cc = cc.CommandClient(ctlloc)
     self.mark = 6
 
     # reset IP tables
