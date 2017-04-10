@@ -1,5 +1,5 @@
 import socket
-import subprocess
+from subprocess import Popen, PIPE
 import uuid
 import json
 
@@ -11,7 +11,7 @@ class CommandClient(object):
             self.client = SubprocessClient()
 
     def run_command(self, command):
-        self.client.run_command(command)
+        return self.client.run_command(command)
 
     def run_commands(self, commands):
         for command in commands:
@@ -25,16 +25,16 @@ class SubprocessClient(object):
         process = Popen(command, shell=True, executable="/bin/bash", stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
         if process.returncode != 0:
-            return stdout, stderr
+            return (stdout, stderr)
         else:
-            return stdout, None
+            return (stdout, None)
 
 class UnixSocketClient(object):
     SOCKET = "/var/run/command.sock"
 
     def _send(self, request):
         unix_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        unix_socket.connect(CommandClient.SOCKET)
+        unix_socket.connect(UnixSocketClient.SOCKET)
         unix_socket.sendall(json.dumps(request))
         response_string = unix_socket.recv(4096)
         unix_socket.close()

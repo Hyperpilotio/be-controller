@@ -1,6 +1,6 @@
 {
     "mode" : "k8s",
-    "ctlloc" : "out",
+    "ctlloc" : "in",
     "default_class": "HP",
     "period": 5,
     "slack_threshold_shrink": 0.05,
@@ -16,4 +16,3 @@
     "link_bw_mbps" : 10000,
     "max_bw_mbps" : 700
 }
-
