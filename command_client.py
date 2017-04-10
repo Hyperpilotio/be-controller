@@ -34,7 +34,7 @@ class UnixSocketClient(object):
 
     def _send(self, request):
         unix_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        unix_socket.connect(CommandClient.SOCKET)
+        unix_socket.connect(UnixSocketClient.SOCKET)
         unix_socket.sendall(json.dumps(request))
         response_string = unix_socket.recv(4096)
         unix_socket.close()
