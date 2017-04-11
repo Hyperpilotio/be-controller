@@ -39,7 +39,7 @@ class NetClass(object):
     self.mark = 6
 
     # reset IP tables
-    _, err = self.cc.run_command('iptables -t mangle -F')
+    out, err = self.cc.run_command('iptables -t mangle -F')
     if err:
       raise Exception('Could not reset iptables: ' + err)
 
@@ -73,7 +73,7 @@ class NetClass(object):
       raise Exception('Duplicate filter for IP %s' % cont_ip)
     self.cont_ips.add(cont_ip)
 
-    _, err = self.cc.run_command('iptables -t mangle -A PREROUTING -i %s -s %s -j MARK --set-mark %d' \
+    out, err = self.cc.run_command('iptables -t mangle -A PREROUTING -i %s -s %s -j MARK --set-mark %d' \
                                % (self.iface_cont, cont_ip, self.mark))
     if err:
       raise Exception('Could not add iptable filter for %s: %s' % (cont_ip, err))
@@ -86,7 +86,7 @@ class NetClass(object):
       raise Exception('Not existing filter for %s' % cont_ip)
     self.cont_ips.remove(cont_ip)
 
-    _, err = self.cc.run_command('iptables -t mangle -D PREROUTING -i %s -s %s -j MARK --set-mark %d' \
+    out, err = self.cc.run_command('iptables -t mangle -D PREROUTING -i %s -s %s -j MARK --set-mark %d' \
                                % (self.iface_cont, cont_ip, self.mark))
     if err:
       raise Exception('Could not add iptable filter for %s: %s' % (cont_ip, err))
@@ -95,7 +95,7 @@ class NetClass(object):
   def setBwLimit(self, bw_mbps):
     # replace always work for tc filter
 
-    _, err = self.cc.run_command('tc class replace dev %s parent 1: classid 1:10 htb rate %dmbit ceil %dmbit' \
+    out, err = self.cc.run_command('tc class replace dev %s parent 1: classid 1:10 htb rate %dmbit ceil %dmbit' \
                                % (self.iface_ext, bw_mbps, bw_mbps))
     if err:
       raise Exception('Could not change htb class rate: ' + err)

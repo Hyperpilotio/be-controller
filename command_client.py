@@ -6,16 +6,18 @@ import json
 class CommandClient(object):
     def __init__(self, ctlloc):
         if ctlloc == "in":
+            print "Using unix socket client for commands"
             self.client = UnixSocketClient()
         else:
+            print "Using subprocess client for commands"
             self.client = SubprocessClient()
 
     def run_command(self, command):
-        self.client.run_command(command)
+        return self.client.run_command(command)
 
     def run_commands(self, commands):
         for command in commands:
-            _, err = self.run_command(command)
+            out, err = self.run_command(command)
             if err:
                 return False
         return True
@@ -25,9 +27,9 @@ class SubprocessClient(object):
         process = Popen(command, shell=True, executable="/bin/bash", stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
         if process.returncode != 0:
-            return stdout, stderr
+            return (stdout, stderr)
         else:
-            return stdout, None
+            return (stdout, None)
 
 class UnixSocketClient(object):
     SOCKET = "/var/run/command.sock"

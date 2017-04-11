@@ -18,6 +18,8 @@ spec:
           volumeMounts:
             - mountPath: /var/run/docker.sock
               name: docker-sock
+            - mountPath: /var/run/command.sock
+              name: command-sock
           env:
             - name: MY_NODE_NAME
               valueFrom:
@@ -27,6 +29,9 @@ spec:
          - hostPath:
               path: /var/run/docker.sock
            name: docker-sock
+         - hostPath:
+              path: /var/run/command.sock
+           name: command-sock
          - hostPath:
               path: /sbin
            name: sbin
