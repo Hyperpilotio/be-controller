@@ -96,14 +96,17 @@ def ActiveContainers():
               active_containers[cid].ipaddress = pod.status.pod_ip
     except (ApiException, TypeError, ValueError):
       print "Cannot talk to K8S API server, labels unknown."
-    # get all best effort pods
+    # get first qos tracked workload on this node, if it exists 
     label_selector = 'hyperpilot.io/qos=true'
     try:
       pods = st.node.kenv.list_pod_for_all_namespaces(watch=False,\
                                             label_selector=label_selector)
       if len(pods.items) > 1:
         print "Multiple QoS tracked workloads, ignoring all but first"
-      st.node.qos_app = pods.items[0].status.container_statuses[0].name
+      for pod in pods.items:
+        if pod.spec.node_name == st.node.name:
+          st.node.qos_app = pod.status.container_statuses[0].name
+          break
     except (ApiException, TypeError, ValueError, IndexError):
       print "Cannot find QoS service name"
 
