@@ -85,7 +85,7 @@ def ActiveContainers():
           for cont in pod.status.container_statuses:
             cid = cont.container_id[len('docker://'):]
             if cid in active_containers:
-              if  active_containers[cid].wclass == 'HP':
+              if active_containers[cid].wclass == 'HP':
                 active_containers[cid].wclass = 'BE'
                 stats.be_cont += 1
                 stats.be_shares += active_containers[cid].shares
@@ -171,7 +171,7 @@ def SloSlackFile():
 def SloSlackQoSDS(name):
   """ Read SLO slack from QoS data store
   """
-  print "  Getting SLO for ", name
+  print "  Getting SLO for", name
   try:
     _ = pycurl.Curl()
     data = BytesIO()
@@ -183,7 +183,7 @@ def SloSlackQoSDS(name):
       print "Problem accessing QoS data store"
       return 0.0
     if name not in output['data']:
-      print "QoS datastore does not track workload ", name
+      print "QoS datastore does not track workload", name
       return 0.0
     elif 'metrics' not in output['data'][name] or \
        'slack' not in output['data'][name]['metrics']:
