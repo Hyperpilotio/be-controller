@@ -61,7 +61,7 @@ def NetControll():
         be_bw = 0.0
       net.setBwLimit(be_bw)
     elif st.verbose:
-      print "Net stats lost"
+      print "Net stats lost, bw_usage: " + str(bw_usage)
 
     # loop
     if st.verbose:
