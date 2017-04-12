@@ -50,7 +50,7 @@ The controller expects to find exactly one pod in the whole cluster marked with 
 
 **BE On/Off**
 
-The BE controller uses uses the `hyperpilot.io/be-enabled` node label to indicate if the node is currently accepting BE workloads or not. The value of the label is determined locally by the controller based on the SLO slack. It is best to issue BE workloads so that they are only scheduled to nodes with BE enabled. Use the following 
+The BE controller uses uses the `hyperpilot.io/be-enabled` node label to indicate if the node is currently accepting BE workloads or not. The value of the label is determined locally by the controller based on the SLO slack. It is best to issue BE workloads so that they are only scheduled to nodes with BE enabled. Use the following in deployment files: 
 
 ```annotations:
         scheduler.alpha.kubernetes.io/affinity: >
