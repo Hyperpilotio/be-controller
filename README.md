@@ -48,6 +48,31 @@ The controller expects best effort pods to be marked with label `hyperpilot.io/w
 
 The controller expects to find exactly one pod in the whole cluster marked with `hyperpilot.io/qos: "true"`. This is the HP workload that the controller tries to read the SLO for. 
 
+**BE On/Off**
+
+The BE controller uses uses the `hyperpilot.io/be-enabled` node label to indicate if the node is currently accepting BE workloads or not. The value of the label is determined locally by the controller based on the SLO slack. It is best to issue BE workloads so that they are only scheduled to nodes with BE enabled. Use the following 
+
+```annotations:
+        scheduler.alpha.kubernetes.io/affinity: >
+          {
+            "nodeAffinity": {
+              "requiredDuringSchedulingIgnoredDuringExecution": {
+                "nodeSelectorTerms": [
+                  {
+                    "matchExpressions": [
+                      {
+                        "key": "hyperpilot.io/be-enabled",
+                        "operator": "In",
+                        "values": ["true"]
+                      }
+                    ]
+                  }
+                ]
+              }
+             }
+          }
+``` 
+
 **Assumptions and Limitations**
 
 The controller assumes a K8S cluster. It can run within a pod (ctlloc:"in") or on the node directy (ctlloc:"out"). When it runs within a pod, it can find the right credentials for K8S on its own. When it turns outside of a pod, it assume the credentials are at `~/.kube/config`. 
