@@ -168,8 +168,11 @@ class NetClass(object):
       tokens: -47 ctokens: -47
     """
     results = {}
-    for _ in re.finditer('class htb 1:(?P<cls>\d+).*?\n.*?rate (?P<rate>\d+)bit', text, re.DOTALL):
+    for _ in re.finditer('class htb 1:(?P<cls>\d+).*?\n.*?rate (?P<rate>\d+K?)bit', text, re.DOTALL):
       cls = int(_.group('cls'))
-      rate = int(_.group('rate'))
-      results[cls] = float(rate / (1000000.0)) # convert to mbps
+      rate = _.group('rate')
+      if rate[-1] == "K":
+        rate = rate[:-1] + "000"
+
+      results[cls] = float(int(rate) / (1000000.0)) # convert to mbps
     return results
