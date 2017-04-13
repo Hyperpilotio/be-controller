@@ -114,7 +114,7 @@ def ActiveContainers():
 
 
 def CpuStatsDocker():
-  """Calculates CPU usage statistics for each container using Docker APIs
+  """Calculates CPU usage for the node using container statistics from Docker APIs
   """
   cpu_usage = 0.0
   for _, cont in st.active_containers.items():
@@ -138,7 +138,7 @@ def CpuStatsDocker():
 
 
 def CpuStatsK8S():
-  """Calculates CPU usage statistics using K8S APIs
+  """Calculates CPU usage for the node using statistics from K8S APIs, in percentage value
   """
   try:
     _ = pycurl.Curl()
@@ -148,7 +148,7 @@ def CpuStatsK8S():
     _.perform()
     output = json.loads(data.getvalue())
     usage_nano_cores = output['node']['cpu']['usageNanoCores']
-    cpu_usage = usage_nano_cores / (st.node.cpu * 1E9)
+    cpu_usage = usage_nano_cores / (st.node.cpu * 1E9) * 100.0
     return cpu_usage
   except (ValueError, pycurl.error)  as e:
     print "Problem calculating CpuStatsK8S ", e
@@ -425,7 +425,7 @@ def __init__():
 
     if st.verbose:
       print "Shares controller ", cycle, " at ", dt.now().strftime('%H:%M:%S')
-      print " Qos app ", st.node.qos_app, ", slack ", slo_slack, ", CPU load ", cpu_usage
+      print " Qos app ", st.node.qos_app, ", slack ", slo_slack, ", CPU utilization ", cpu_usage
       print " HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
       print " BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
     cycle += 1
