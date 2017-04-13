@@ -407,24 +407,26 @@ def __init__():
     # grow, shrink or disable control
     if slo_slack < 0.0:
       if st.verbose:
-        print " Disabling phase"
+        print " Disabling BE phase"
       DisableBE()
     elif slo_slack < slack_threshold_shrink or \
          cpu_usage > load_threshold_shrink:
       if st.verbose:
-        print " Shrinking phase"
+        print " Shrinking BE phase"
       ShrinkBE()
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow:
       if st.verbose:
-        print " Growing phase"
+        print " Growing BE phase"
       GrowBE()
       EnableBE()
     else:
+      if st.verbose:
+        print " Enabling BE phase"
       EnableBE()
 
     if st.verbose:
-      print "Shares controller ", cycle, " at ", dt.now().strftime('%H:%M:%S')
+      print "Shares controller cycle ", cycle, " at ", dt.now().strftime('%H:%M:%S')
       print " Qos app ", st.node.qos_app, ", slack ", slo_slack, ", CPU utilization ", cpu_usage
       print " HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
       print " BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
