@@ -411,8 +411,9 @@ def __init__():
     st.enabled = ControllerEnabled()
 
     if not st.enabled:
-      print "Controller is disabled"
+      print "Controller is disabled, skipping main control"
       time.sleep(period)
+      continue
 
     # check SLO slack from file
     slo_slack = SloSlack(st.node.qos_app)
