@@ -178,9 +178,9 @@ def ControllerEnabled():
     _.setopt(_.WRITEFUNCTION, data.write)
     _.perform()
     output = json.loads(data.getvalue())
-    return output['data']['enabled']
+    return output['data']
   except (ValueError, pycurl.error) as e:
-    print "Problem accessing QoS data store ", e
+    print "Problem accessing QoS data store:", e
     return st.enabled
 
 
