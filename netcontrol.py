@@ -36,6 +36,10 @@ def NetControll():
   # control loop
   while 1:
 
+    if not st.enabled:
+      print "Controller is disabled"
+      time.sleep(period)
+
     # get IP of all active BE containers
     active_be_ips = set()
     for _, cont in st.active_containers.items():

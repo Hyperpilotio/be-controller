@@ -66,3 +66,4 @@ active_containers = {}
 status = 0
 # node info
 node = NodeInfo()
+enabled = False

@@ -96,7 +96,7 @@ def ActiveContainers():
               active_containers[cid].ipaddress = pod.status.pod_ip
     except (ApiException, TypeError, ValueError):
       print "Cannot talk to K8S API server, labels unknown."
-    # get first qos tracked workload on this node, if it exists 
+    # get first qos tracked workload on this node, if it exists
     label_selector = 'hyperpilot.io/qos=true'
     try:
       pods = st.node.kenv.list_pod_for_all_namespaces(watch=False,\
@@ -170,6 +170,19 @@ def SloSlackFile():
     array = [[float(x) for x in line.split()] for line in _]
   return array[0][0]
 
+def ControllerEnabled():
+  try:
+    _ = pycurl.Curl()
+    data = BytesIO()
+    _.setopt(_.URL, 'qos-data-store:7781/v1/switch')
+    _.setopt(_.WRITEFUNCTION, data.write)
+    _.perform()
+    output = json.loads(data.getvalue())
+    return output['data']['enabled']
+  except (ValueError, pycurl.error) as e:
+    print "Problem accessing QoS data store ", e
+    return st.enabled
+
 
 def SloSlackQoSDS(name):
   """ Read SLO slack from QoS data store
@@ -183,7 +196,7 @@ def SloSlackQoSDS(name):
     _.perform()
     output = json.loads(data.getvalue())
     if output['error']:
-      print "Problem accessing QoS data store"
+      print "Problem accessing QoS data store: " + output['data']
       return 0.0
     if name not in output['data']:
       print "QoS datastore does not track workload", name
@@ -395,14 +408,19 @@ def __init__():
   # control loop
   cycle = 0
   while 1:
+    st.enabled = ControllerEnabled()
+
+    if not st.enabled:
+      print "Controller is disabled"
+      time.sleep(period)
+
+    # check SLO slack from file
+    slo_slack = SloSlack(st.node.qos_app)
 
     # get active containers and their class
     st.active_containers, stats = ActiveContainers()
     # get CPU stats
     cpu_usage = CpuStats()
-
-    # check SLO slack from file
-    slo_slack = SloSlack(st.node.qos_app)
 
     # grow, shrink or disable control
     if slo_slack < 0.0:
