@@ -145,6 +145,19 @@ class NetClass(object):
       results[_] = float(ending_value[_] - starting_value[_]/elapsed_time)
     return results
 
+  @staticmethod
+  def parseBwStats(text):
+    results = {}
+    for _ in re.finditer('class htb 1:(?P<cls>\d+).*?\n.*?rate (?P<rate>\d+[K|M]?)bit', text, re.DOTALL):
+      cls = int(_.group('cls'))
+      rate = _.group('rate')
+      if rate[-1] == "K":
+        rate = rate[:-1] + "000"
+      elif rate[-1] == "M":
+        rate = rate[:-1] + "00"
+
+      results[cls] = float(int(rate) / (1000000.0)) # convert to mbps
+    return results
 
   def getBwStats(self):
     """Performs a non-blocking read averaged bandwidth statistics
@@ -167,12 +180,5 @@ class NetClass(object):
       lended: 18460 borrowed: 0 giants: 0
       tokens: -47 ctokens: -47
     """
-    results = {}
-    for _ in re.finditer('class htb 1:(?P<cls>\d+).*?\n.*?rate (?P<rate>\d+K?)bit', text, re.DOTALL):
-      cls = int(_.group('cls'))
-      rate = _.group('rate')
-      if rate[-1] == "K":
-        rate = rate[:-1] + "000"
 
-      results[cls] = float(int(rate) / (1000000.0)) # convert to mbps
-    return results
+    return NetClass.parseBwStats(text)
