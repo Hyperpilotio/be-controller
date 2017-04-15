@@ -154,7 +154,7 @@ class NetClass(object):
       if rate[-1] == "K":
         rate = rate[:-1] + "000"
       elif rate[-1] == "M":
-        rate = rate[:-1] + "00"
+        rate = rate[:-1] + "000000"
 
       results[cls] = float(int(rate) / (1000000.0)) # convert to mbps
     return results

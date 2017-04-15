@@ -46,7 +46,7 @@ class htb 1:10 root prio 0 rate 662Mbit ceil 662Mbit burst 1489b cburst 1489b
          lended: 10889769 borrowed: 0 giants: 0
          tokens: 13 ctokens: 13
 """
-        self.assertEqual(nc.NetClass.parseBwStats(s), {10: 12300 / 1000000.0, 1: 2395000 / 1000000.0})
+        self.assertEqual(nc.NetClass.parseBwStats(s), {10: 123000000 / 1000000.0, 1: 2395000 / 1000000.0})
 
 if __name__ == '__main__':
         unittest.main()
