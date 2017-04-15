@@ -187,7 +187,7 @@ def ControllerEnabled():
 def SloSlackQoSDS(name):
   """ Read SLO slack from QoS data store
   """
-  print "  Getting SLO for", name
+  print "  Getting slack value for", name, "from QoS data store"
   try:
     _ = pycurl.Curl()
     data = BytesIO()
@@ -265,6 +265,7 @@ def GrowBE():
   be_growth_rate = st.params['BE_growth_rate']
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
+      old_shares = cont.shares
       new_shares = int(be_growth_rate*cont.shares)
       # if initial shares is very small, boost quickly
       if new_shares == cont.shares:
@@ -272,6 +273,7 @@ def GrowBE():
       cont.shares = new_shares
       try:
         cont.docker.update(cpu_shares=cont.shares)
+        print "Grow CPU shares of BE container from %d to %d" % (old_shares, new_shares)
       except docker.errors.APIError:
         print "Cannot update shares for container %s" % cont.name
 
@@ -284,6 +286,7 @@ def ShrinkBE():
   min_shares = st.params['min_shares']
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
+      old_shares = cont.shares
       new_shares = int(be_shrink_rate*cont.shares)
       if new_shares == cont.shares:
         new_shares = int(cont.shares/2)
@@ -292,6 +295,7 @@ def ShrinkBE():
       cont.shares = new_shares
       try:
         cont.docker.update(cpu_shares=cont.shares)
+        print "Shrink CPU shares of BE container from %d to %d" % (old_shares, new_shares)
       except docker.errors.APIError:
         print "Cannot update shares for container %s" % cont.name
 
@@ -388,6 +392,7 @@ def __init__():
   configK8S()
 
   # simpler parameters
+  slack_threshold_disable = st.params['slack_threshold_disable']
   slack_threshold_shrink = st.params['slack_threshold_shrink']
   load_threshold_shrink = st.params['load_threshold_shrink']
   slack_threshold_grow = st.params['slack_threshold_grow']
@@ -424,7 +429,7 @@ def __init__():
     cpu_usage = CpuStats()
 
     # grow, shrink or disable control
-    if slo_slack < 0.0:
+    if slo_slack < slack_threshold_disable:
       if st.verbose:
         print " Disabling BE phase"
       DisableBE()
@@ -436,17 +441,17 @@ def __init__():
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow:
       if st.verbose:
-        print " Growing BE phase"
-      GrowBE()
+        print " Enabling and Growing BE phase"
       EnableBE()
+      GrowBE()
     else:
       if st.verbose:
         print " Enabling BE phase"
       EnableBE()
 
     if st.verbose:
-      print "Shares controller cycle ", cycle, " at ", dt.now().strftime('%H:%M:%S')
-      print " Qos app ", st.node.qos_app, ", slack ", slo_slack, ", CPU utilization ", cpu_usage
+      print "Shares controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
+      print " Qos app", st.node.qos_app, ", slack", slo_slack, ", CPU utilization", cpu_usage
       print " HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
       print " BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
     cycle += 1
