@@ -428,32 +428,38 @@ def __init__():
     # get CPU stats
     cpu_usage = CpuStats()
 
+    if st.verbose:
+      print "Shares controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
+      print " Current state:"
+      print "  Qos app", st.node.qos_app, ", slack", slo_slack, ", CPU utilization", cpu_usage
+      print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
+      print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
+
     # grow, shrink or disable control
     if slo_slack < slack_threshold_disable:
       if st.verbose:
-        print " Disabling BE phase"
+        print " Action: Disabling BE"
       DisableBE()
     elif slo_slack < slack_threshold_shrink or \
          cpu_usage > load_threshold_shrink:
       if st.verbose:
-        print " Shrinking BE phase"
+        print " Action: Shrinking BE"
       ShrinkBE()
     elif slo_slack > slack_threshold_grow and \
-         cpu_usage < load_threshold_grow:
+         stats.be_cont == 0:
       if st.verbose:
-        print " Enabling and Growing BE phase"
+        print " Action: Enabling BE"
       EnableBE()
+    elif slo_slack > slack_threshold_grow and \
+         stats.be_cont > 0 and \
+         cpu_usage > load_threshold_grow:
+      if st.verbose:
+        print " Action: Growing BE"
       GrowBE()
     else:
       if st.verbose:
-        print " Enabling BE phase"
-      EnableBE()
+        print " Action: No change"
 
-    if st.verbose:
-      print "Shares controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
-      print " Qos app", st.node.qos_app, ", slack", slo_slack, ", CPU utilization", cpu_usage
-      print " HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
-      print " BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
     cycle += 1
     time.sleep(period)
 
