@@ -277,11 +277,15 @@ def GrowBE():
       if new_shares == cont.shares:
         new_shares = 2 * cont.shares
       cont.shares = new_shares
+      if new_shares == old_shares:
+        print "Skip growing CPU shares as new shares remains unchanged", str(new_shares)
+        continue
+
       try:
         cont.docker.update(cpu_shares=cont.shares)
         print "Grow CPU shares of BE container from %d to %d" % (old_shares, new_shares)
-      except docker.errors.APIError:
-        print "Cannot update shares for container %s" % cont.name
+      except docker.errors.APIError as e:
+        print "Cannot update shares for container %s: %s" % (str(cont), e)
 
 
 def ShrinkBE():
@@ -299,11 +303,16 @@ def ShrinkBE():
       if new_shares < min_shares:
         new_shares = min_shares
       cont.shares = new_shares
+
+      if new_shares == old_shares:
+        print "Skip shrinking CPU shares as new shares remains unchanged", str(new_shares)
+        continue
+
       try:
         cont.docker.update(cpu_shares=cont.shares)
         print "Shrink CPU shares of BE container from %d to %d" % (old_shares, new_shares)
-      except docker.errors.APIError:
-        print "Cannot update shares for container %s" % cont.name
+      except docker.errors.APIError as e:
+        print "Cannot update shares for container %s: %s" % (str(cont), e)
 
 
 def ParseArgs():
@@ -323,8 +332,8 @@ def ParseArgs():
     with open(args.config, 'r') as json_data_file:
       try:
         params = json.load(json_data_file)
-      except ValueError:
-        print "Error in reading configuration file ", args.config
+      except ValueError as e:
+        print "Error in reading configuration file %s: %s" % (args.config, e)
         sys.exit(-1)
   else:
     print "Cannot read configuration file ", args.config
@@ -370,8 +379,8 @@ def configK8S():
         config.load_kube_config()
       st.node.kenv = client.CoreV1Api()
       print "K8S API initialized."
-    except config.ConfigException:
-      print "Cannot initialize K8S environment, terminating."
+    except config.ConfigException as e:
+      print "Cannot initialize K8S environment, terminating:", e
       sys.exit(-1)
     st.node.name = os.getenv('MY_NODE_NAME')
     if st.node.name is None:
