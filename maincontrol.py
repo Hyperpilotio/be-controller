@@ -431,7 +431,12 @@ def __init__():
     st.enabled = ControllerEnabled()
 
     if not st.enabled:
-      print "Controller is disabled, skipping main control"
+      print "BE Controller is disabled, skipping main control"
+      time.sleep(period)
+      continue
+
+    if st.get_param('shared_controller_disabled', False) is False:
+      print "Shares Controller is disabled"
       time.sleep(period)
       continue
 

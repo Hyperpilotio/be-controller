@@ -54,7 +54,6 @@ class NodeInfo(object):
     self.kenv = None
     self.docker = None
 
-
 # globals
 # controller parameters
 params = {}
@@ -67,3 +66,9 @@ status = 0
 # node info
 node = NodeInfo()
 enabled = False
+
+def get_param(name, default):
+  if name in params:
+    return params[name]
+
+  return default

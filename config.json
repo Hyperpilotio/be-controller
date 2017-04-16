@@ -15,5 +15,7 @@
     "iface_ext": "ens3",
     "iface_cont": "weave",
     "link_bw_mbps" : 10000,
-    "max_bw_mbps" : 700
+    "max_bw_mbps" : 700,
+    "shares_controller_enabled": true,
+    "net_controller_enabled": false
 }

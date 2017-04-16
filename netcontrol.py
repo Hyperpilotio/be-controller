@@ -37,7 +37,12 @@ def NetControll():
   while 1:
 
     if not st.enabled:
-      print "Controller is disabled, skipping net control"
+      print "BE Controller is disabled, skipping net control"
+      time.sleep(period)
+      continue
+
+    if st.get_param('net_controller_disabled', False) is False:
+      print "Net Controller is disabled"
       time.sleep(period)
       continue
 
