@@ -41,7 +41,7 @@ def NetControll():
       time.sleep(period)
       continue
 
-    if st.get_param('net_controller_disabled', False) is False:
+    if st.get_param('net_controller_disabled', False) is True:
       print "Net Controller is disabled"
       time.sleep(period)
       continue

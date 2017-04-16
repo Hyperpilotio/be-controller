@@ -435,7 +435,7 @@ def __init__():
       time.sleep(period)
       continue
 
-    if st.get_param('shared_controller_disabled', False) is False:
+    if st.get_param('shared_controller_disabled', False) is True:
       print "Shares Controller is disabled"
       time.sleep(period)
       continue
