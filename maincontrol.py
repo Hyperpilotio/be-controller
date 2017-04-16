@@ -225,8 +225,10 @@ def EnableBE():
   if st.k8sOn:
     command = 'kubectl label --overwrite nodes ' + st.node.name + ' hyperpilot.io/be-enabled=true'
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, \
-                               stderr=subprocess.STDOUT)
-    _ = process.wait()
+                               stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+      print "Failed to enable BE on k8s: %s" % stderr
 
 
 def DisableBE():
@@ -256,8 +258,10 @@ def DisableBE():
   if st.k8sOn:
     command = 'kubectl label --overwrite nodes ' + st.node.name + ' hyperpilot.io/be-enabled=false'
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, \
-                                 stderr=subprocess.STDOUT)
-    _ = process.wait()
+                                 stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+      print "Failed to disable BE on k8s: %s" % stderr
 
 
 def GrowBE():
