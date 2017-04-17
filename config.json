@@ -3,11 +3,11 @@
     "ctlloc" : "in",
     "default_class": "HP",
     "period": 5,
-    "slack_threshold_disable": -0.1,
+    "slack_threshold_disable": -0.05,
     "slack_threshold_shrink": 0.1,
     "slack_threshold_grow": 0.2,
-    "load_threshold_shrink": 85.0,
-    "load_threshold_grow": 70.0,
+    "load_threshold_shrink": 100.0,
+    "load_threshold_grow": 100.0,
     "min_shares": 2,
     "BE_growth_rate": 1.1,
     "BE_shrink_rate": 0.9,
@@ -16,6 +16,6 @@
     "iface_cont": "weave",
     "link_bw_mbps" : 10000,
     "max_bw_mbps" : 700,
-    "shares_controller_disabled": true,
+    "shares_controller_disabled": false,
     "net_controller_disabled": false
 }
