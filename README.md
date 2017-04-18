@@ -28,7 +28,7 @@ If a configuration file is not given, it looks for `config.json` in the local di
 * "mode" : selects operating mode ("k8s" for kubernetes)
 * "ctlloc" : does the controller run inside a container or not ("out"/"in")
 * "default_class": the default class for pods not labeled with `hyperpilot.io/wclass:XX` ("HP")
-* "period": the main controller period (15)
+* "period": the main controller period (5)
 * "slack_threshold_disable": the SLO slack below which we disable BE pods (-0.05)
 * "slack_threshold_shrink": the SLO slack below which we shrink BE pods (0.1)
 * "slack_threshold_grow": the SLO slack above which we enable or grow BE pods (0.2)
@@ -41,7 +41,7 @@ If a configuration file is not given, it looks for `config.json` in the local di
 * "iface_ext": the host interface on K8S nodes ("ens3")
 * "iface_cont": the K8S interface on K8S nodes ("weave")
 * "link_bw_mbps" : the maximum link bandwidth (10000)
-* "max_bw_mbps" : the actual maximium bandwidth on this cluster (500)
+* "max_bw_mbps" : the actual maximium bandwidth on this cluster (700)
 
 **Labels**
 

@@ -96,17 +96,19 @@ def ActiveContainers():
               active_containers[cid].ipaddress = pod.status.pod_ip
     except (ApiException, TypeError, ValueError):
       print "Cannot talk to K8S API server, labels unknown."
-    # get first qos tracked workload on this node, if it exists 
+    # get first qos tracked workload on this node, if it exists
     label_selector = 'hyperpilot.io/qos=true'
     try:
       pods = st.node.kenv.list_pod_for_all_namespaces(watch=False,\
                                             label_selector=label_selector)
       if len(pods.items) > 1:
         print "Multiple QoS tracked workloads, ignoring all but first"
-      for pod in pods.items:
-        if pod.spec.node_name == st.node.name:
-          st.node.qos_app = pod.status.container_statuses[0].name
-          break
+
+      st.node.qos_app = pods.items[0].status.container_statuses[0].name
+
+      #for pod in pods.items:
+       # if pod.spec.node_name == st.node.name:
+        #  break
     except (ApiException, TypeError, ValueError, IndexError):
       print "Cannot find QoS service name"
 
@@ -223,8 +225,10 @@ def EnableBE():
   if st.k8sOn:
     command = 'kubectl label --overwrite nodes ' + st.node.name + ' hyperpilot.io/be-enabled=true'
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, \
-                               stderr=subprocess.STDOUT)
-    _ = process.wait()
+                               stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+      print "Failed to enable BE on k8s: %s" % stderr
 
 
 def DisableBE():
@@ -254,8 +258,10 @@ def DisableBE():
   if st.k8sOn:
     command = 'kubectl label --overwrite nodes ' + st.node.name + ' hyperpilot.io/be-enabled=false'
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, \
-                                 stderr=subprocess.STDOUT)
-    _ = process.wait()
+                                 stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+      print "Failed to disable BE on k8s: %s" % stderr
 
 
 def GrowBE():
@@ -271,11 +277,15 @@ def GrowBE():
       if new_shares == cont.shares:
         new_shares = 2 * cont.shares
       cont.shares = new_shares
+      if new_shares == old_shares:
+        print "Skip growing CPU shares as new shares remains unchanged", str(new_shares)
+        continue
+
       try:
         cont.docker.update(cpu_shares=cont.shares)
         print "Grow CPU shares of BE container from %d to %d" % (old_shares, new_shares)
-      except docker.errors.APIError:
-        print "Cannot update shares for container %s" % cont.name
+      except docker.errors.APIError as e:
+        print "Cannot update shares for container %s: %s" % (str(cont), e)
 
 
 def ShrinkBE():
@@ -293,11 +303,16 @@ def ShrinkBE():
       if new_shares < min_shares:
         new_shares = min_shares
       cont.shares = new_shares
+
+      if new_shares == old_shares:
+        print "Skip shrinking CPU shares as new shares remains unchanged", str(new_shares)
+        continue
+
       try:
         cont.docker.update(cpu_shares=cont.shares)
         print "Shrink CPU shares of BE container from %d to %d" % (old_shares, new_shares)
-      except docker.errors.APIError:
-        print "Cannot update shares for container %s" % cont.name
+      except docker.errors.APIError as e:
+        print "Cannot update shares for container %s: %s" % (str(cont), e)
 
 
 def ParseArgs():
@@ -317,8 +332,8 @@ def ParseArgs():
     with open(args.config, 'r') as json_data_file:
       try:
         params = json.load(json_data_file)
-      except ValueError:
-        print "Error in reading configuration file ", args.config
+      except ValueError as e:
+        print "Error in reading configuration file %s: %s" % (args.config, e)
         sys.exit(-1)
   else:
     print "Cannot read configuration file ", args.config
@@ -364,8 +379,8 @@ def configK8S():
         config.load_kube_config()
       st.node.kenv = client.CoreV1Api()
       print "K8S API initialized."
-    except config.ConfigException:
-      print "Cannot initialize K8S environment, terminating."
+    except config.ConfigException as e:
+      print "Cannot initialize K8S environment, terminating:", e
       sys.exit(-1)
     st.node.name = os.getenv('MY_NODE_NAME')
     if st.node.name is None:
@@ -416,7 +431,12 @@ def __init__():
     st.enabled = ControllerEnabled()
 
     if not st.enabled:
-      print "Controller is disabled, skipping main control"
+      print "BE Controller is disabled, skipping main control"
+      time.sleep(period)
+      continue
+
+    if st.get_param('shares_controller_disabled', False) is True:
+      print "Shares Controller is disabled"
       time.sleep(period)
       continue
 
@@ -436,23 +456,26 @@ def __init__():
       print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
 
     # grow, shrink or disable control
-    if slo_slack < slack_threshold_disable:
+    if slo_slack < slack_threshold_disable and \
+         stats.be_cont > 0:
       if st.verbose:
         print " Action: Disabling BE"
       DisableBE()
-    elif slo_slack < slack_threshold_shrink or \
-         cpu_usage > load_threshold_shrink:
+    elif (slo_slack < slack_threshold_shrink or \
+         cpu_usage > load_threshold_shrink) and \
+         stats.be_cont > 0:
       if st.verbose:
         print " Action: Shrinking BE"
       ShrinkBE()
     elif slo_slack > slack_threshold_grow and \
+         cpu_usage < load_threshold_grow and \
          stats.be_cont == 0:
       if st.verbose:
         print " Action: Enabling BE"
       EnableBE()
     elif slo_slack > slack_threshold_grow and \
-         stats.be_cont > 0 and \
-         cpu_usage > load_threshold_grow:
+         cpu_usage < load_threshold_grow and \
+         stats.be_cont > 0:
       if st.verbose:
         print " Action: Growing BE"
       GrowBE()
