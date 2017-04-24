@@ -38,7 +38,7 @@ def ActiveContainers():
   """ Identifies active containers in a docker environment.
   """
   min_shares = st.params['min_shares']
-  min_be_quota = st.params['min_be_quota']
+  min_be_quota = int(st.node.cpu * 100000 * st.params['min_be_quota'])
   active_containers = {}
   stats = st.ControllerStats()
 
@@ -63,26 +63,25 @@ def ActiveContainers():
       if _.shares < min_shares:
         _.shares = min_shares
         cont.update(cpu_shares=_.shares)
-      # set period if not set already
-      if _.period != 100000:
-        cont.update(cpu_period=100000)
-      if _.quota == 0:
-        _.quota = int(min_be_quota*st.node.cpu*100000)
-        cont.update(cpu_quota=_.quota)
       # check container class
       if 'hyperpilot.io/wclass' in cont.attrs['Config']['Labels']:
         _.wclass = cont.attrs['Config']['Labels']['hyperpilot.io/wclass']
-      if _.wclass == 'HP':
-        stats.hp_cont += 1
-        stats.hp_shares += _.shares
-        stats.hp_quota += _.quota
-      else:
+      if _.wclass == 'BE':
         stats.be_cont += 1
+        # set min shares if incorrect
         if _.shares != min_shares:
           _.shares = min_shares
           cont.update(cpu_shares=_.shares)
+        # set period and quota if not set already
+        if _.period != 100000:
+          cont.update(cpu_period=100000)
+        if _.quota == 0:
+          _.quota = int(min_be_quota*st.node.cpu*100000)
+          cont.update(cpu_quota=_.quota)
         stats.be_shares += _.shares
-        stats.hp_quota += _.quota
+      else:
+        stats.hp_cont += 1
+        stats.hp_shares += _.shares
       # append to dictionary of active containers
       active_containers[_.docker_id] = _
     except docker.errors.APIError:
@@ -104,13 +103,17 @@ def ActiveContainers():
                 active_containers[cid].wclass = 'BE'
                 stats.be_cont += 1
                 stats.be_shares += active_containers[cid].shares
-                stats.be_quota += active_containers[cid].quota
                 stats.hp_cont -= 1
                 stats.hp_shares -= active_containers[cid].shares
-                stats.hp_quota -= active_containers[cid].quota
               active_containers[cid].k8s_pod_name = pod.metadata.name
               active_containers[cid].k8s_namespace = pod.metadata.namespace
               active_containers[cid].ipaddress = pod.status.pod_ip
+              # set period and quota if not set already
+              if _.period != 100000:
+                cont.update(cpu_period=100000)
+              if _.quota == 0:
+                _.quota = int(min_be_quota*st.node.cpu*100000)
+                cont.update(cpu_quota=_.quota)
     except (ApiException, TypeError, ValueError):
       print "Cannot talk to K8S API server, labels unknown."
 
@@ -282,14 +285,14 @@ def GrowBE():
       assumption: non 0 quotas to begin with
   """
   be_growth_rate = st.params['BE_growth_rate']
-  max_be_quota = st.params['max_be_quota']
+  max_be_quota = int(st.node.cpu * 100000 * st.params['max_be_quota'])
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
       old_quota = cont.quota
       cont.quota = int(be_growth_rate*cont.quota)
       # We limit each BE container to a max quota
-      if cont.quota > st.node.cpu * 100000 * max_be_quota:
-        cont.quota = st.node.cpu * 100000 * max_be_quota
+      if cont.quota > max_be_quota:
+        cont.quota = max_be_quota
       try:
         cont.docker.update(cpu_quota=cont.quota)
         print "Grow CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
@@ -301,10 +304,14 @@ def ShrinkBE():
   """ shrinks quota for all BE workloads by be_shrink_rate
   """
   be_shrink_rate = st.params['BE_shrink_rate']
+  min_be_quota = int(st.node.cpu * 100000 * st.params['min_be_quota'])
+
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
       old_quota = cont.shares
       cont.quota = int(be_shrink_rate*cont.quota)
+      if cont.quota < min_be_quota:
+        cont.quota = min_be_quota
       try:
         cont.docker.update(cpu_quot=cont.quota)
         print "Shrink CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
@@ -449,8 +456,6 @@ def __init__():
       print "CPU controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
       print " Current state:"
       print "  Qos app", st.node.qos_app, ", slack", slo_slack, ", CPU utilization", cpu_usage
-      print "  HP (%d): %d quota" % (stats.hp_cont, stats.hp_quota)
-      print "  BE (%d): %d quota" % (stats.be_cont, stats.be_quota)
 
     # grow, shrink or disable control
     if slo_slack < slack_threshold_disable and \

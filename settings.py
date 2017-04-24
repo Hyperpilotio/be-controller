@@ -39,8 +39,6 @@ class ControllerStats(object):
     self.be_cont = 0
     self.hp_shares = 0
     self.be_shares = 0
-    self.hp_quota = 0
-    self.be_quota = 0
     self.hp_cpu_percent = 0
     self.be_cpu_percent = 0
 
