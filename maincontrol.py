@@ -1,5 +1,5 @@
 """
-Dynamic CPU shares controller based on the Heracles design
+Dynamic CPU controller based on the Heracles design
 
 Current pitfalls:
 - when shrinking, we penalize all BE containers instead of killing 1-2 of them
@@ -38,6 +38,7 @@ def ActiveContainers():
   """ Identifies active containers in a docker environment.
   """
   min_shares = st.params['min_shares']
+  min_be_quota = st.params['min_be_quota']
   active_containers = {}
   stats = st.ControllerStats()
 
@@ -54,20 +55,34 @@ def ActiveContainers():
       _.docker_id = cont.id
       _.docker_name = cont.name
       _.docker = cont
-      # check container shares
+      # check container shares and quotas
+      _.quota = cont.attrs['HostConfig']['CpuQuota']
+      _.period = cont.attrs['HostConfig']['CpuPeriod']
       _.shares = cont.attrs['HostConfig']['CpuShares']
+      # check that container has at least 2 shares
       if _.shares < min_shares:
         _.shares = min_shares
         cont.update(cpu_shares=_.shares)
+      # set period if not set already
+      if _.period != 100000:
+        cont.update(cpu_period=100000)
+      if _.quota == 0:
+        _.quota = int(min_be_quota*st.node.cpu*100000)
+        cont.update(cpu_quota=_.quota)
       # check container class
       if 'hyperpilot.io/wclass' in cont.attrs['Config']['Labels']:
         _.wclass = cont.attrs['Config']['Labels']['hyperpilot.io/wclass']
       if _.wclass == 'HP':
         stats.hp_cont += 1
         stats.hp_shares += _.shares
+        stats.hp_quota += _.quota
       else:
         stats.be_cont += 1
+        if _.shares != min_shares:
+          _.shares = min_shares
+          cont.update(cpu_shares=_.shares)
         stats.be_shares += _.shares
+        stats.hp_quota += _.quota
       # append to dictionary of active containers
       active_containers[_.docker_id] = _
     except docker.errors.APIError:
@@ -89,13 +104,16 @@ def ActiveContainers():
                 active_containers[cid].wclass = 'BE'
                 stats.be_cont += 1
                 stats.be_shares += active_containers[cid].shares
+                stats.be_quota += active_containers[cid].quota
                 stats.hp_cont -= 1
                 stats.hp_shares -= active_containers[cid].shares
+                stats.hp_quota -= active_containers[cid].quota
               active_containers[cid].k8s_pod_name = pod.metadata.name
               active_containers[cid].k8s_namespace = pod.metadata.namespace
               active_containers[cid].ipaddress = pod.status.pod_ip
     except (ApiException, TypeError, ValueError):
       print "Cannot talk to K8S API server, labels unknown."
+
     # get first qos tracked workload on this node, if it exists
     label_selector = 'hyperpilot.io/qos=true'
     try:
@@ -103,12 +121,7 @@ def ActiveContainers():
                                             label_selector=label_selector)
       if len(pods.items) > 1:
         print "Multiple QoS tracked workloads, ignoring all but first"
-
       st.node.qos_app = pods.items[0].status.container_statuses[0].name
-
-      #for pod in pods.items:
-       # if pod.spec.node_name == st.node.name:
-        #  break
     except (ApiException, TypeError, ValueError, IndexError):
       print "Cannot find QoS service name"
 
@@ -226,7 +239,7 @@ def EnableBE():
     command = 'kubectl label --overwrite nodes ' + st.node.name + ' hyperpilot.io/be-enabled=true'
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, \
                                stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
+    _, stderr = process.communicate()
     if process.returncode != 0:
       print "Failed to enable BE on k8s: %s" % stderr
 
@@ -259,58 +272,42 @@ def DisableBE():
     command = 'kubectl label --overwrite nodes ' + st.node.name + ' hyperpilot.io/be-enabled=false'
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, \
                                  stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
+    _, stderr = process.communicate()
     if process.returncode != 0:
       print "Failed to disable BE on k8s: %s" % stderr
 
 
 def GrowBE():
-  """ grows number of shares for all BE workloads by be_growth_rate
-      assumption: non 0 shares
+  """ grows quotas for all BE workloads by be_growth_rate
+      assumption: non 0 quotas to begin with
   """
   be_growth_rate = st.params['BE_growth_rate']
+  max_be_quota = st.params['max_be_quota']
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
-      old_shares = cont.shares
-      new_shares = int(be_growth_rate*cont.shares)
-      # if initial shares is very small, boost quickly
-      if new_shares == cont.shares:
-        new_shares = 2 * cont.shares
-      cont.shares = new_shares
-      if new_shares == old_shares:
-        print "Skip growing CPU shares as new shares remains unchanged", str(new_shares)
-        continue
-
+      old_quota = cont.quota
+      cont.quota = int(be_growth_rate*cont.quota)
+      # We limit each BE container to a max quota
+      if cont.quota > st.node.cpu * 100000 * max_be_quota:
+        cont.quota = st.node.cpu * 100000 * max_be_quota
       try:
-        cont.docker.update(cpu_shares=cont.shares)
-        print "Grow CPU shares of BE container from %d to %d" % (old_shares, new_shares)
+        cont.docker.update(cpu_quota=cont.quota)
+        print "Grow CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
       except docker.errors.APIError as e:
-        print "Cannot update shares for container %s: %s" % (str(cont), e)
+        print "Cannot update quota for container %s: %s" % (str(cont), e)
 
 
 def ShrinkBE():
-  """ shrinks number of shares for all BE workloads by be_shrink_rate
-      warning: it does not work if shares are 0 to begin with
+  """ shrinks quota for all BE workloads by be_shrink_rate
   """
   be_shrink_rate = st.params['BE_shrink_rate']
-  min_shares = st.params['min_shares']
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
-      old_shares = cont.shares
-      new_shares = int(be_shrink_rate*cont.shares)
-      if new_shares == cont.shares:
-        new_shares = int(cont.shares/2)
-      if new_shares < min_shares:
-        new_shares = min_shares
-      cont.shares = new_shares
-
-      if new_shares == old_shares:
-        print "Skip shrinking CPU shares as new shares remains unchanged", str(new_shares)
-        continue
-
+      old_quota = cont.shares
+      cont.quota = int(be_shrink_rate*cont.quota)
       try:
-        cont.docker.update(cpu_shares=cont.shares)
-        print "Shrink CPU shares of BE container from %d to %d" % (old_shares, new_shares)
+        cont.docker.update(cpu_quot=cont.quota)
+        print "Shrink CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
       except docker.errors.APIError as e:
         print "Cannot update shares for container %s: %s" % (str(cont), e)
 
@@ -397,7 +394,7 @@ def configK8S():
 
 
 def __init__():
-  """ Main function of shares controller
+  """ Main function of CPU controller
   """
   # parse arguments
   st.params = ParseArgs()
@@ -436,7 +433,7 @@ def __init__():
       continue
 
     if st.get_param('shares_controller_disabled', False) is True:
-      print "Shares Controller is disabled"
+      print "CPU controller is disabled"
       time.sleep(period)
       continue
 
@@ -449,11 +446,11 @@ def __init__():
     cpu_usage = CpuStats()
 
     if st.verbose:
-      print "Shares controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
+      print "CPU controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
       print " Current state:"
       print "  Qos app", st.node.qos_app, ", slack", slo_slack, ", CPU utilization", cpu_usage
-      print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
-      print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
+      print "  HP (%d): %d quota" % (stats.hp_cont, stats.hp_quota)
+      print "  BE (%d): %d quota" % (stats.be_cont, stats.be_quota)
 
     # grow, shrink or disable control
     if slo_slack < slack_threshold_disable and \

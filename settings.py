@@ -7,8 +7,6 @@ __author__ = "Christos Kozyrakis"
 __email__ = "christos@hyperpilot.io"
 __copyright__ = "Copyright 2017, HyperPilot Inc"
 
-from kubernetes import client
-
 class Container(object):
   """ A class for tracking active containers
   """
@@ -19,6 +17,7 @@ class Container(object):
     self.docker_id = 0
     self.wclass = 'HP'
     self.shares = 0
+    self.quota = 0
     self.docker = None
     self.cpu_percent = 0
     self.ipaddress = ''
@@ -40,6 +39,8 @@ class ControllerStats(object):
     self.be_cont = 0
     self.hp_shares = 0
     self.be_shares = 0
+    self.hp_quota = 0
+    self.be_quota = 0
     self.hp_cpu_percent = 0
     self.be_cpu_percent = 0
 
