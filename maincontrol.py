@@ -39,6 +39,7 @@ def ActiveContainers():
   """
   min_shares = st.params['min_shares']
   min_be_quota = int(st.node.cpu * 100000 * st.params['min_be_quota'])
+  max_be_quota = int(st.node.cpu * 100000 * st.params['max_be_quota'])
   active_containers = {}
   stats = st.ControllerStats()
 
@@ -75,8 +76,8 @@ def ActiveContainers():
         # set period and quota if not set already
         if _.period != 100000:
           cont.update(cpu_period=100000)
-        if _.quota == 0:
-          _.quota = int(min_be_quota*st.node.cpu*100000)
+        if _.quota == 0 or _.quota > max_be_quota:
+          _.quota = min_be_quota
           cont.update(cpu_quota=_.quota)
         stats.be_shares += _.shares
       else:
@@ -109,11 +110,13 @@ def ActiveContainers():
               active_containers[cid].k8s_namespace = pod.metadata.namespace
               active_containers[cid].ipaddress = pod.status.pod_ip
               # set period and quota if not set already
-              if _.period != 100000:
-                cont.update(cpu_period=100000)
-              if _.quota == 0:
-                _.quota = int(min_be_quota*st.node.cpu*100000)
-                cont.update(cpu_quota=_.quota)
+              if active_containers[cid].period != 100000:
+                active_containers[cid].period = 100000
+                active_containers[cid].docker.update(cpu_period=100000)
+              if active_containers[cid].quota == 0 or \
+                 active_containers[cid].quota > max_be_quota:
+                active_containers[cid].quota = int(min_be_quota)
+                active_containers[cid].docker.update(cpu_quota=min_be_quota)
     except (ApiException, TypeError, ValueError):
       print "Cannot talk to K8S API server, labels unknown."
 
@@ -308,12 +311,12 @@ def ShrinkBE():
 
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
-      old_quota = cont.shares
+      old_quota = cont.quota
       cont.quota = int(be_shrink_rate*cont.quota)
       if cont.quota < min_be_quota:
         cont.quota = min_be_quota
       try:
-        cont.docker.update(cpu_quot=cont.quota)
+        cont.docker.update(cpu_quota=cont.quota)
         print "Shrink CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
       except docker.errors.APIError as e:
         print "Cannot update shares for container %s: %s" % (str(cont), e)

@@ -17,6 +17,7 @@ class Container(object):
     self.docker_id = 0
     self.wclass = 'HP'
     self.shares = 0
+    self.period = 0
     self.quota = 0
     self.docker = None
     self.cpu_percent = 0
