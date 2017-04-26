@@ -7,6 +7,8 @@ __author__ = "Christos Kozyrakis"
 __email__ = "christos@hyperpilot.io"
 __copyright__ = "Copyright 2017, HyperPilot Inc"
 
+import store
+
 class Container(object):
   """ A class for tracking active containers
   """
@@ -72,3 +74,5 @@ def get_param(name, default):
     return params[name]
 
   return default
+
+store = InfluxWriter()

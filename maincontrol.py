@@ -16,7 +16,6 @@ __copyright__ = "Copyright 2017, HyperPilot Inc"
 # standard
 import time
 from datetime import datetime as dt
-import structlog
 import sys
 import json
 import argparse
@@ -33,8 +32,6 @@ from kubernetes.client.rest import ApiException
 # hyperpilot imports
 import settings as st
 import netcontrol as net
-
-logger = structlog.get_logger()
 
 def ActiveContainers():
   """ Identifies active containers in a docker environment.
@@ -431,8 +428,6 @@ def __init__():
   """ Main function of CPU controller
   """
 
-  log = logger.new()
-
   # parse arguments
   st.params = ParseArgs()
 
@@ -508,6 +503,7 @@ def __init__():
     # grow, shrink or disable control
     if slo_slack < slack_threshold_reset and \
          stats.be_cont > 0:
+      shares_cycle_data["action"] = "disable_be"
       if st.verbose:
         print " Action: Resetting BE"
       ResetBE()
@@ -518,24 +514,37 @@ def __init__():
       ShrinkBE(slo_slack-slack_threshold_shrink)
     elif cpu_usage > load_threshold_shrink and \
          stats.be_cont > 0:
+      shares_cycle_data["action"] = "shrink_be"
       if st.verbose:
         print " Action: Shrinking BE"
       ShrinkBE(0)
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow and \
          stats.be_cont == 0:
+      shares_cycle_data["action"] = "enable_be"
       if st.verbose:
         print " Action: Enabling BE"
       EnableBE()
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow and \
          stats.be_cont > 0:
+      shares_cycle_data["action"] = "grow_be"
       if st.verbose:
         print " Action: Growing BE"
       GrowBE(slo_slack)
     else:
+      shares_cycle_data["action"] = "none"
       if st.verbose:
         print " Action: No change"
+
+    if st.verbose:
+      print "Shares controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
+      print " Current state:"
+      print "  Qos app", st.node.qos_app, ", slack", slo_slack, ", CPU utilization", cpu_usage
+      print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
+      print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
+
+    store.write(shares_cycle_data["at"], st.node.name, "cpu_shares", shares_cycle_data)
 
     cycle += 1
     time.sleep(period)

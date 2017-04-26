@@ -92,5 +92,8 @@ def NetControll():
     if st.verbose:
       print "Net controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
       print " BW: %f (Total used) %f (HP used), %f (BE alloc)" %(total_bw, hp_bw, be_bw)
+
+    store.write(net_cycle_data["at"], st.node.name, "net", net_cycle_data)
+
     cycle += 1
     time.sleep(period)
