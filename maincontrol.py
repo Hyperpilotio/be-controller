@@ -73,13 +73,16 @@ def ActiveContainers():
         if _.shares != min_shares:
           _.shares = min_shares
           cont.update(cpu_shares=_.shares)
-        # set period and quota if not set already
+        stats.be_shares += _.shares
+        # set period and quota if not set already, or set incorrectly 
         if _.period != 100000:
           cont.update(cpu_period=100000)
-        if _.quota == 0 or _.quota > max_be_quota:
+        if _.quota < min_be_quota:
           _.quota = min_be_quota
           cont.update(cpu_quota=_.quota)
-        stats.be_shares += _.shares
+        if _.quota > max_be_quota:
+          _.quota = max_be_quota
+          cont.update(cpu_quota=_.quota)
       else:
         stats.hp_cont += 1
         stats.hp_shares += _.shares
@@ -288,11 +291,12 @@ def GrowBE():
       assumption: non 0 quotas to begin with
   """
   be_growth_rate = st.params['BE_growth_rate']
+  #be_growth_rate = 1 + be_growth_rate * slack
   max_be_quota = int(st.node.cpu * 100000 * st.params['max_be_quota'])
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
       old_quota = cont.quota
-      cont.quota = int(be_growth_rate*cont.quota)
+      cont.quota = int(be_growth_rate * cont.quota)
       # We limit each BE container to a max quota
       if cont.quota > max_be_quota:
         cont.quota = max_be_quota
@@ -307,12 +311,13 @@ def ShrinkBE():
   """ shrinks quota for all BE workloads by be_shrink_rate
   """
   be_shrink_rate = st.params['BE_shrink_rate']
+  #be_shrink_rate = 1 + be_shrink_rate * slack
   min_be_quota = int(st.node.cpu * 100000 * st.params['min_be_quota'])
 
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
       old_quota = cont.quota
-      cont.quota = int(be_shrink_rate*cont.quota)
+      cont.quota = int(be_shrink_rate * cont.quota)
       if cont.quota < min_be_quota:
         cont.quota = min_be_quota
       try:
@@ -452,13 +457,15 @@ def __init__():
 
     # get active containers and their class
     st.active_containers, stats = ActiveContainers()
+
     # get CPU stats
     cpu_usage = CpuStats()
 
     if st.verbose:
       print "CPU controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
       print " Current state:"
-      print "  Qos app", st.node.qos_app, ", slack", slo_slack, ", CPU utilization", cpu_usage
+      print "  Qos app", st.node.qos_app, ", BE count", stats.be_cont
+      print "  SLO slack", slo_slack, ", Node CPU utilization", cpu_usage
 
     # grow, shrink or disable control
     if slo_slack < slack_threshold_disable and \
