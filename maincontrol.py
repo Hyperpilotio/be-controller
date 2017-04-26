@@ -16,6 +16,7 @@ __copyright__ = "Copyright 2017, HyperPilot Inc"
 # standard
 import time
 from datetime import datetime as dt
+import structlog
 import sys
 import json
 import argparse
@@ -33,6 +34,7 @@ from kubernetes.client.rest import ApiException
 import settings as st
 import netcontrol as net
 
+logger = structlog.get_logger()
 
 def ActiveContainers():
   """ Identifies active containers in a docker environment.
@@ -428,6 +430,9 @@ def configK8S():
 def __init__():
   """ Main function of CPU controller
   """
+
+  log = logger.new()
+
   # parse arguments
   st.params = ParseArgs()
 
@@ -478,6 +483,21 @@ def __init__():
 
     # get CPU stats
     cpu_usage = CpuStats()
+
+    shares_cycle_data = {
+      "controller": "cpu_shares",
+      "cycle": cycle,
+      "at": dt.now().strftime('%H:%M:%S'),
+      "qos_app": st.node.qos_app,
+      "slack": slo_slack,
+      "cpu_usage": cpu_usage,
+      "hp_cont": stats.hp_cont,
+      "hp_shares": stats.hp_shares,
+      "be_cont": stats.be_cont,
+      "be_shares": stats.be_shares
+    }
+
+    log.msg(shares_cycle_data)
 
     if st.verbose:
       print "CPU controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
