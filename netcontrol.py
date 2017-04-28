@@ -79,12 +79,14 @@ def NetControll():
       "be_bw": be_bw
     }
 
+    at = dt.now().strftime('%H:%M:%S')
+
     # loop
     if st.verbose:
-      print "Net controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
+      print "Net controller cycle", cycle, "at", at,
       print " BW: %f (Total used) %f (HP used), %f (BE alloc)" %(total_bw, hp_bw, be_bw)
 
-    st.stats_writer.write(net_cycle_data["at"], st.node.name, "net", net_cycle_data)
+    st.stats_writer.write(at, st.node.name, "net", net_cycle_data)
 
     cycle += 1
     time.sleep(period)

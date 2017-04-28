@@ -482,6 +482,8 @@ def __init__():
     # get CPU stats
     cpu_usage = CpuStats()
 
+    at = dt.now().strftime('%H:%M:%S')
+
     quota_cycle_data = {
       "cycle": cycle,
       "qos_app": st.node.qos_app,
@@ -495,7 +497,7 @@ def __init__():
     }
 
     if st.verbose:
-      print "CPU controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
+      print "CPU controller cycle", cycle, "at", at,
       print " Current state:"
       print "  Qos app", st.node.qos_app, ", BE count", stats.be_cont
       print "  SLO slack", slo_slack, ", Node CPU utilization", cpu_usage
@@ -544,7 +546,7 @@ def __init__():
       print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
       print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
 
-    st.stats_writer.write(quota_cycle_data["at"], st.node.name, "cpu_quota", quota_cycle_data)
+    st.stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)
 
     cycle += 1
     time.sleep(period)
