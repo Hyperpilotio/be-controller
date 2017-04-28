@@ -21,6 +21,7 @@
     "iface_cont": "weave",
     "link_bw_mbps" : 10000,
     "max_bw_mbps" : 700,
-    "shares_controller_disabled": false,
-    "net_controller_disabled": false
+    "quota_controller_disabled": false,
+    "net_controller_disabled": false,
+    "write_metrics": false
 }

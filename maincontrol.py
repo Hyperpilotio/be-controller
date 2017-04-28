@@ -325,7 +325,7 @@ def GrowBE(slack):
 def ShrinkBE(slack):
   """ shrinks quota for all BE workloads by be_shrink_rate
   """
-  
+
   if slack == 0:
       be_shrink_rate = st.params['BE_shrink_rate']
   else:
@@ -468,7 +468,7 @@ def __init__():
       time.sleep(period)
       continue
 
-    if st.get_param('shares_controller_disabled', False) is True:
+    if st.get_param('quota_controller_disabled', False) is True:
       print "CPU controller is disabled"
       time.sleep(period)
       continue
@@ -546,7 +546,8 @@ def __init__():
       print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
       print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
 
-    st.stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)
+    if st.get_param('write_metrics', False) is True:
+      st.stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)
 
     cycle += 1
     time.sleep(period)

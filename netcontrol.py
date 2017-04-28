@@ -86,7 +86,8 @@ def NetControll():
       print "Net controller cycle", cycle, "at", at,
       print " BW: %f (Total used) %f (HP used), %f (BE alloc)" %(total_bw, hp_bw, be_bw)
 
-    st.stats_writer.write(at, st.node.name, "net", net_cycle_data)
+    if st.get_param('write_metrics', False) is True:
+      st.stats_writer.write(at, st.node.name, "net", net_cycle_data)
 
     cycle += 1
     time.sleep(period)
