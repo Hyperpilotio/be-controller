@@ -4,7 +4,7 @@ from influxdb.client import InfluxDBClientError
 class InfluxWriter(object):
     def __init__(self):
         self.client = InfluxDBClient(
-            "influxsrv", 8083, "root", "root", "be_controller")
+            "influxsrv.hyperpilot", 8086, "root", "root", "be_controller")
         try:
             self.client.create_database("be_controller")
         except InfluxDBClientError:
@@ -19,7 +19,7 @@ class InfluxWriter(object):
             },
             'measurement': 'data',
             'fields': {
-                'value': data
+                "value": str(data)
             }
         }
 

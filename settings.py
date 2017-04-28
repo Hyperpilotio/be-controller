@@ -75,4 +75,4 @@ def get_param(name, default):
 
   return default
 
-store = InfluxWriter()
+stats_writer = store.InfluxWriter()

@@ -16,13 +16,9 @@ __copyright__ = "Copyright 2017, HyperPilot Inc"
 import time
 from datetime import datetime as dt
 
-import structlog
-
 # hyperpilot imports
 import settings as st
 import netclass as netclass
-
-logger = structlog.get_logger()
 
 def NetControll():
   """ Network controller
@@ -36,7 +32,6 @@ def NetControll():
                           st.params['ctlloc'])
   period = st.params['net_period']
   cycle = 0
-  log = logger.new()
   # control loop
   while 1:
 
@@ -78,22 +73,18 @@ def NetControll():
       print "Net stats lost, bw_usage: " + str(bw_usage)
 
     net_cycle_data = {
-      "controller": "net",
       "cycle": cycle,
-      "at": dt.now().strftime('%H:%M:%S'),
       "total_bw": total_bw,
       "hp_bw": hp_bw,
       "be_bw": be_bw
     }
-
-    log.msg(net_cycle_data)
 
     # loop
     if st.verbose:
       print "Net controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
       print " BW: %f (Total used) %f (HP used), %f (BE alloc)" %(total_bw, hp_bw, be_bw)
 
-    store.write(net_cycle_data["at"], st.node.name, "net", net_cycle_data)
+    st.stats_writer.write(net_cycle_data["at"], st.node.name, "net", net_cycle_data)
 
     cycle += 1
     time.sleep(period)

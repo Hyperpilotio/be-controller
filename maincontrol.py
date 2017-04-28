@@ -217,18 +217,21 @@ def SloSlackQoSDS(name):
     output = json.loads(data.getvalue())
     if output['error']:
       print "Problem accessing QoS data store: " + output['data']
-      return 0.0
+      return 0.0, 0.0
     if name not in output['data']:
       print "QoS datastore does not track workload", name
-      return 0.0
+      return 0.0, 0.0
     elif 'metrics' not in output['data'][name] or \
        'slack' not in output['data'][name]['metrics']:
-      return 0.0
+      return 0.0, 0.0
     else:
-      return float(output['data'][name]['metrics']['slack'])
+      metrics = output['data'][name]['metrics']
+      if 'latency' not in metrics:
+        metrics['latency'] = 0.0
+      return float(metrics['slack']), float(metrics['latency'])
   except (ValueError, pycurl.error) as e:
     print "Problem accessing QoS data store ", e
-    return 0.0
+    return 0.0, 0.0
 
 def SloSlack(name):
   """ Read SLO slack
@@ -471,7 +474,7 @@ def __init__():
       continue
 
     # check SLO slack from file
-    slo_slack = SloSlack(st.node.qos_app)
+    slo_slack, latency = SloSlack(st.node.qos_app)
 
     # get active containers and their class
     st.active_containers, stats = ActiveContainers()
@@ -479,20 +482,17 @@ def __init__():
     # get CPU stats
     cpu_usage = CpuStats()
 
-    shares_cycle_data = {
-      "controller": "cpu_shares",
+    quota_cycle_data = {
       "cycle": cycle,
-      "at": dt.now().strftime('%H:%M:%S'),
       "qos_app": st.node.qos_app,
       "slack": slo_slack,
+      "latency": latency,
       "cpu_usage": cpu_usage,
       "hp_cont": stats.hp_cont,
       "hp_shares": stats.hp_shares,
       "be_cont": stats.be_cont,
       "be_shares": stats.be_shares
     }
-
-    log.msg(shares_cycle_data)
 
     if st.verbose:
       print "CPU controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
@@ -503,7 +503,7 @@ def __init__():
     # grow, shrink or disable control
     if slo_slack < slack_threshold_reset and \
          stats.be_cont > 0:
-      shares_cycle_data["action"] = "disable_be"
+      quota_cycle_data["action"] = "disable_be"
       if st.verbose:
         print " Action: Resetting BE"
       ResetBE()
@@ -514,37 +514,37 @@ def __init__():
       ShrinkBE(slo_slack-slack_threshold_shrink)
     elif cpu_usage > load_threshold_shrink and \
          stats.be_cont > 0:
-      shares_cycle_data["action"] = "shrink_be"
+      quota_cycle_data["action"] = "shrink_be"
       if st.verbose:
         print " Action: Shrinking BE"
       ShrinkBE(0)
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow and \
          stats.be_cont == 0:
-      shares_cycle_data["action"] = "enable_be"
+      quota_cycle_data["action"] = "enable_be"
       if st.verbose:
         print " Action: Enabling BE"
       EnableBE()
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow and \
          stats.be_cont > 0:
-      shares_cycle_data["action"] = "grow_be"
+      quota_cycle_data["action"] = "grow_be"
       if st.verbose:
         print " Action: Growing BE"
       GrowBE(slo_slack)
     else:
-      shares_cycle_data["action"] = "none"
+      quota_cycle_data["action"] = "none"
       if st.verbose:
         print " Action: No change"
 
     if st.verbose:
-      print "Shares controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
+      print "Quota controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
       print " Current state:"
       print "  Qos app", st.node.qos_app, ", slack", slo_slack, ", CPU utilization", cpu_usage
       print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
       print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
 
-    store.write(shares_cycle_data["at"], st.node.name, "cpu_shares", shares_cycle_data)
+    st.stats_writer.write(quota_cycle_data["at"], st.node.name, "cpu_quota", quota_cycle_data)
 
     cycle += 1
     time.sleep(period)
