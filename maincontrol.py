@@ -74,7 +74,7 @@ def ActiveContainers():
           _.shares = min_shares
           cont.update(cpu_shares=_.shares)
         stats.be_shares += _.shares
-        # set period and quota if not set already, or set incorrectly 
+        # set period and quota if unset, or set incorrectly
         if _.period != 100000:
           cont.update(cpu_period=100000)
         if _.quota < min_be_quota or _.quota > max_be_quota:
