@@ -12,6 +12,7 @@ __author__ = "Christos Kozyrakis"
 __email__ = "christos@hyperpilot.io"
 __copyright__ = "Copyright 2017, HyperPilot Inc"
 
+import math
 import command_client as cc
 
 class BlkioClass(object):
@@ -63,10 +64,14 @@ class BlkioClass(object):
     if iops >= self.max_iops:
       raise Exception('Blkio limit ' + iops + ' is higher than max iops ' + self.max_iops)
 
+    # heuristic: assuming N BE containers, allow each to BE job to use up to 1/sqrt(N) IOPS
+    # a hierarchical cgroup would be better
+    limit = (int)(iops/math.sqrt(len(self.cont_ids)))
+
     # set the limit for every container
     for cont in self.cont_ids:
       directory = '/sys/fs/cgroup/blkio/docker/' + cont
-      cmd = self.block_dev + ' ' + iops
+      cmd = self.block_dev + ' ' + limit
       # set read limit
       rfile = directory + 'blkio.throttle.read_iops_device'
       _, err = self.cc.run_command('echo ' + cmd + ' > ' + rfile)
