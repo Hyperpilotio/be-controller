@@ -32,6 +32,7 @@ from kubernetes.client.rest import ApiException
 # hyperpilot imports
 import settings as st
 import netcontrol as net
+import blkiocontrol as blkio
 
 def ActiveContainers():
   """ Identifies active containers in a docker environment.
@@ -327,10 +328,10 @@ def ShrinkBE(slack):
   """
 
   if slack == 0:
-      be_shrink_rate = st.params['BE_shrink_rate']
+    be_shrink_rate = st.params['BE_shrink_rate']
   else:
-      be_shrink_ratio = st.params['BE_shrink_ratio']
-      be_shrink_rate = 1 + be_shrink_ratio * slack
+    be_shrink_ratio = st.params['BE_shrink_ratio']
+    be_shrink_rate = 1 + be_shrink_ratio * slack
   min_be_quota = int(st.node.cpu * 100000 * st.params['min_be_quota'])
 
   for _, cont in st.active_containers.items():
@@ -456,6 +457,14 @@ def __init__():
     _.start()
   except threading.ThreadError:
     print "Cannot start network controller; continuing without it"
+  if st.verbose:
+    print "Starting blkio controller"
+  try:
+    _ = threading.Thread(name='BlkioControll', target=blkio.BlkioControll)
+    _.setDaemon(True)
+    _.start()
+  except threading.ThreadError:
+    print "Cannot start blkio controller; continuing without it"
 
 
   # control loop
@@ -485,15 +494,15 @@ def __init__():
     at = dt.now().strftime('%H:%M:%S')
 
     quota_cycle_data = {
-      "cycle": cycle,
-      "qos_app": st.node.qos_app,
-      "slack": slo_slack,
-      "latency": latency,
-      "cpu_usage": cpu_usage,
-      "hp_cont": stats.hp_cont,
-      "hp_shares": stats.hp_shares,
-      "be_cont": stats.be_cont,
-      "be_shares": stats.be_shares
+        "cycle": cycle,
+        "qos_app": st.node.qos_app,
+        "slack": slo_slack,
+        "latency": latency,
+        "cpu_usage": cpu_usage,
+        "hp_cont": stats.hp_cont,
+        "hp_shares": stats.hp_shares,
+        "be_cont": stats.be_cont,
+        "be_shares": stats.be_shares
     }
 
     if st.verbose:
@@ -538,13 +547,6 @@ def __init__():
       quota_cycle_data["action"] = "none"
       if st.verbose:
         print " Action: No change"
-
-    if st.verbose:
-      print "Quota controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
-      print " Current state:"
-      print "  Qos app", st.node.qos_app, ", slack", slo_slack, ", CPU utilization", cpu_usage
-      print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
-      print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
 
     if st.get_param('write_metrics', False) is True:
       st.stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)

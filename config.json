@@ -23,5 +23,10 @@
     "max_bw_mbps" : 700,
     "quota_controller_disabled": false,
     "net_controller_disabled": false,
-    "write_metrics": false
+    "write_metrics": false,
+    "blkio_period": 2,
+    "blkio_controller_disabled": false,
+    "block_dev": "202:0",
+    "max_iops": 1500,
+    "hp_iops": 1000
 }

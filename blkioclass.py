@@ -61,24 +61,27 @@ class BlkioClass(object):
   def setIopsLimit(self, iops):
     # replace always work for tc filter
 
+    if len(self.cont_ids) == 0:
+      return
+    
     if iops >= self.max_iops:
       raise Exception('Blkio limit ' + iops + ' is higher than max iops ' + self.max_iops)
 
-    # heuristic: assuming N BE containers, allow each to BE job to use up to 1/sqrt(N) IOPS
+    # heuristic: assuming N BE containers, allow each to BE job to use up to 1/N IOPS
     # a hierarchical cgroup would be better
-    limit = (int)(iops/math.sqrt(len(self.cont_ids)))
+    limit = (int)(iops/len(self.cont_ids))
 
     # set the limit for every container
     for cont in self.cont_ids:
-      directory = '/sys/fs/cgroup/blkio/docker/' + cont
-      cmd = self.block_dev + ' ' + limit
+      directory = '/sys/fs/cgroup/blkio/docker/' + cont 
+      cmd = "\"" + self.block_dev + ' ' + str(limit) + "\""
       # set read limit
-      rfile = directory + 'blkio.throttle.read_iops_device'
+      rfile = directory + '/blkio.throttle.read_iops_device'
       _, err = self.cc.run_command('echo ' + cmd + ' > ' + rfile)
       if err:
         raise Exception('Could not set blkio limit: ' + err)
       # set write limit
-      wfile = directory + 'blkio.throttle.write_iops_device'
+      wfile = directory + '/blkio.throttle.write_iops_device'
       _, err = self.cc.run_command('echo ' + cmd + ' > ' + wfile)
       if err:
         raise Exception('Could not set blkio limit: ' + err)
