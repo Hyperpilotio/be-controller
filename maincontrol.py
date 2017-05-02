@@ -36,9 +36,9 @@ import netcontrol as net
 def ActiveContainers():
   """ Identifies active containers in a docker environment.
   """
-  min_shares = st.params['min_shares']
-  min_be_quota = int(st.node.cpu * 100000 * st.params['min_be_quota'])
-  max_be_quota = int(st.node.cpu * 100000 * st.params['max_be_quota'])
+  min_shares = st.params['quota_controller']['min_shares']
+  min_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['min_be_quota'])
+  max_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['max_be_quota'])
   active_containers = {}
   stats = st.ControllerStats()
 
@@ -305,9 +305,9 @@ def GrowBE(slack):
   """ grows quotas for all BE workloads by be_growth_rate
       assumption: non 0 quotas to begin with
   """
-  be_growth_ratio = st.params['BE_growth_ratio']
+  be_growth_ratio = st.params['quota_controller']['BE_growth_ratio']
   be_growth_rate = 1 + be_growth_ratio * slack
-  max_be_quota = int(st.node.cpu * 100000 * st.params['max_be_quota'])
+  max_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['max_be_quota'])
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
       old_quota = cont.quota
@@ -327,11 +327,11 @@ def ShrinkBE(slack):
   """
 
   if slack == 0:
-      be_shrink_rate = st.params['BE_shrink_rate']
+      be_shrink_rate = st.params['quota_controller']['BE_shrink_rate']
   else:
-      be_shrink_ratio = st.params['BE_shrink_ratio']
+      be_shrink_ratio = st.params['quota_controller']['BE_shrink_ratio']
       be_shrink_rate = 1 + be_shrink_ratio * slack
-  min_be_quota = int(st.node.cpu * 100000 * st.params['min_be_quota'])
+  min_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['min_be_quota'])
 
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
@@ -434,18 +434,21 @@ def __init__():
   # parse arguments
   st.params = ParseArgs()
 
+  if st.get_param("write_metrics", None, False) is True:
+    st.stats_writer.write(at, st.node.name, "settings", st.params)
+
   # initialize environment
   configDocker()
   configK8S()
 
   # simpler parameters
-  slack_threshold_disable = st.params['slack_threshold_disable']
-  slack_threshold_reset = st.params['slack_threshold_reset']
-  slack_threshold_shrink = st.params['slack_threshold_shrink']
-  load_threshold_shrink = st.params['load_threshold_shrink']
-  slack_threshold_grow = st.params['slack_threshold_grow']
-  load_threshold_grow = st.params['load_threshold_grow']
-  period = st.params['period']
+  slack_threshold_disable = st.params['quota_controller']['slack_threshold_disable']
+  slack_threshold_reset = st.params['quota_controller']['slack_threshold_reset']
+  slack_threshold_shrink = st.params['quota_controller']['slack_threshold_shrink']
+  load_threshold_shrink = st.params['quota_controller']['load_threshold_shrink']
+  slack_threshold_grow = st.params['quota_controller']['slack_threshold_grow']
+  load_threshold_grow = st.params['quota_controller']['load_threshold_grow']
+  period = st.params['quota_controller']['period']
 
   # launch other controllers
   if st.verbose:
@@ -468,7 +471,7 @@ def __init__():
       time.sleep(period)
       continue
 
-    if st.get_param('quota_controller_disabled', False) is True:
+    if st.get_param('disabled', 'quota_controller', False) is True:
       print "CPU controller is disabled"
       time.sleep(period)
       continue
@@ -546,7 +549,7 @@ def __init__():
       print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
       print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
 
-    if st.get_param('write_metrics', False) is True:
+    if st.get_param('write_metrics', 'quota_controller', False) is True:
       st.stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)
 
     cycle += 1

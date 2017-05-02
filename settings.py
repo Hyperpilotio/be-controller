@@ -69,9 +69,15 @@ status = 0
 node = NodeInfo()
 enabled = False
 
-def get_param(name, default):
-  if name in params:
-    return params[name]
+def get_param(name, section=None, default=None):
+  keys = params
+  if section and section in params:
+    keys = keys[section]
+  elif section:
+    return default
+
+  if name in keys:
+    return keys[name]
 
   return default
 
