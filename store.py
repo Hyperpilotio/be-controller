@@ -11,19 +11,14 @@ class InfluxWriter(object):
             pass #Ignore
 
     def write(self, time, hostname, controller, data):
-        stat = {
-            'time': time,
-            'tags': {
-                'hostname': hostname,
-                'controller': controller
-            },
-            'measurement': 'data',
-            'fields': {
-                "value": str(data)
-            }
-        }
-
         try:
-            self.client.write_points([stat])
+            self.client.write_points([{
+                "time": time,
+                "tags": {
+                    "hostname": hostname,
+                },
+                "measurement": controller,
+                "fields": data,
+            }])
         except InfluxDBClientError as e:
             print("Error writing to influx: " + str(e))
