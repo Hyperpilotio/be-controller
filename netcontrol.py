@@ -21,16 +21,17 @@ import settings as st
 import netclass as netclass
 
 def NetControll():
+  netst = st.params['net_controller']
   """ Network controller
   """
   # initialize controller
   if st.verbose:
     print "Starting NetControl (%s, %s, %f, %f)" \
-           % (st.params['iface_ext'], st.params['iface_cont'], st.params['max_bw_mbps'], st.params['link_bw_mbps'])
-  net = netclass.NetClass(st.params['iface_ext'], st.params['iface_cont'], \
-                          st.params['max_bw_mbps'], st.params['link_bw_mbps'], \
+           % (netst['iface_ext'], netst['iface_cont'], netst['max_bw_mbps'], netst['link_bw_mbps'])
+  net = netclass.NetClass(netst['iface_ext'], netst['iface_cont'], \
+                          netst['max_bw_mbps'], netst['link_bw_mbps'], \
                           st.params['ctlloc'])
-  period = st.params['net_period']
+  period = netst['period']
   cycle = 0
   # control loop
   while 1:
@@ -40,7 +41,7 @@ def NetControll():
       time.sleep(period)
       continue
 
-    if st.get_param('net_controller_disabled', False) is True:
+    if st.get_param('disabled', 'net_controller', False) is True:
       print "Net Controller is disabled"
       time.sleep(period)
       continue
@@ -86,7 +87,7 @@ def NetControll():
       print "Net controller cycle", cycle, "at", at,
       print " BW: %f (Total used) %f (HP used), %f (BE alloc)" %(total_bw, hp_bw, be_bw)
 
-    if st.get_param('write_metrics', False) is True:
+    if st.get_param('write_metrics', 'net_controller', False) is True:
       st.stats_writer.write(at, st.node.name, "net", net_cycle_data)
 
     cycle += 1

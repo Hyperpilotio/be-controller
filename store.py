@@ -1,3 +1,4 @@
+import json
 from influxdb import InfluxDBClient
 from influxdb.client import InfluxDBClientError
 
@@ -19,7 +20,7 @@ class InfluxWriter(object):
             },
             'measurement': 'data',
             'fields': {
-                "value": str(data)
+                "value": json.dumps(data)
             }
         }
 
