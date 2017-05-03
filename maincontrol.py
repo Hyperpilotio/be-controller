@@ -288,7 +288,7 @@ def DisableBE():
 def ResetBE():
   """ resets quota for all BE workloads to min_be_quota
   """
-  min_be_quota = int(st.node.cpu * 100000 * st.params['min_be_quota'])
+  min_be_quota = int(st.node.cpu * 100000 * st.params["quota_controller"]['min_be_quota'])
 
   for _, cont in st.active_containers.items():
     if cont.wclass == 'BE':
@@ -435,7 +435,15 @@ def __init__():
   st.params = ParseArgs()
 
   if st.get_param("write_metrics", None, False) is True:
-    st.stats_writer.write(at, st.node.name, "settings", st.params)
+    # flatten the setting params
+    stored_params = {}
+    for key, val in st.params.items():
+        if isinstance(val, dict):
+            for ctrl_param, param_val in val.items():
+                stored_params["{}.{}".format(key, ctrl_param)] = param_val
+        else:
+            stored_params[key] = val
+    st.stats_writer.write(dt.now(), st.node.name, "settings", stored_params)
 
   # initialize environment
   configDocker()
