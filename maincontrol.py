@@ -443,7 +443,8 @@ def __init__():
                 stored_params["{}.{}".format(key, ctrl_param)] = param_val
         else:
             stored_params[key] = val
-    st.stats_writer.write(dt.now(), st.node.name, "settings", stored_params)
+    st.stats_writer.write(dt.now(), os.getenv("MY_NODE_NAME"),
+                          "settings", stored_params)
 
   # initialize environment
   configDocker()
