@@ -12,7 +12,7 @@ __author__ = "Christos Kozyrakis"
 __email__ = "christos@hyperpilot.io"
 __copyright__ = "Copyright 2017, HyperPilot Inc"
 
-import math
+import os
 import command_client as cc
 
 class BlkioClass(object):
@@ -32,9 +32,8 @@ class BlkioClass(object):
     self.cc = cc.CommandClient(ctlloc)
 
     # check if blockio is active
-    out, _ = self.cc.run_command('ls /sys/fs/cgroup/blkio/docker/')
-    if 'No such file or directory' in out:
-      raise Exception('Blkio not available: ' + out)
+    if not os.path.isdir('/sys/fs/cgroup/blkio/docker'):
+      raise Exception('Blkio not configured for docker')
 
 
   def addBeCont(self, cont_id):
@@ -44,26 +43,27 @@ class BlkioClass(object):
       raise Exception('Duplicate blkio throttling request %s' % cont_id)
     # check if blockio is active
     directory = '/sys/fs/cgroup/blkio/docker/' + cont_id
-    out, _ = self.cc.run_command('ls ' + directory)
-    if "No such file or directory" in out:
-      raise Exception('Blkio not setup correctly for container: ' + cont_id)
+    if not os.path.isdir(directory):
+      print 'Blkio not setup correctly for container: '+ cont_id
     self.cont_ids.add(cont_id)
 
 
   def removeBeCont(self, cont_id):
-    """ Removes the long ID of a container to the list of BE containers throttled
+    """ Removes the long ID of a container from the list of BE containers throttled
     """
     if cont_id not in self.cont_ids:
-      raise Exception('Not existing container' % cont_id)
-    self.cont_ids.remove(cont_id)
+      print 'Cannot remove from blkio non existing container %s' % cont_id
+    else:
+      self.cont_ids.remove(cont_id)
 
 
   def setIopsLimit(self, iops):
-    # replace always work for tc filter
-
+    """ Sets rad/write IOPS limit for BE containers
+        Symmetric rd/write limit
+    """
     if len(self.cont_ids) == 0:
       return
-    
+
     if iops >= self.max_iops:
       raise Exception('Blkio limit ' + iops + ' is higher than max iops ' + self.max_iops)
 
@@ -73,15 +73,51 @@ class BlkioClass(object):
 
     # set the limit for every container
     for cont in self.cont_ids:
-      directory = '/sys/fs/cgroup/blkio/docker/' + cont 
-      cmd = "\"" + self.block_dev + ' ' + str(limit) + "\""
-      # set read limit
+      directory = '/sys/fs/cgroup/blkio/docker/' + cont
       rfile = directory + '/blkio.throttle.read_iops_device'
-      _, err = self.cc.run_command('echo ' + cmd + ' > ' + rfile)
-      if err:
-        raise Exception('Could not set blkio limit: ' + err)
-      # set write limit
       wfile = directory + '/blkio.throttle.write_iops_device'
-      _, err = self.cc.run_command('echo ' + cmd + ' > ' + wfile)
-      if err:
-        raise Exception('Could not set blkio limit: ' + err)
+      if not os.path.isdir(directory) or \
+         not os.path.isfile(rfile) or \
+         not os.path.isfile(wfile):
+        print 'Blkio not setup correctly for container: '+ cont
+        continue
+      # throttle string
+      cmd = "\"" + self.block_dev + ' ' + str(limit) + "\""
+      # read limit
+      try:
+        with open(rfile, "w") as _:
+          _.write(cmd)
+        with open(wfile, "w") as _:
+          _.write(cmd)
+      except EnvironmentError:
+        print 'Blkio not setup correctly for container: '+ cont
+        continue
+
+
+  def getIopUsed(self, active_containers):
+    """ Find IOPS used for each active containers
+    """
+    # the output is a dictionary (container --> iops)
+    iops_used = {}
+    pattern = self.block_dev + ' Total'
+
+    for cont in active_containers:
+      # check if directory and stats file exists
+      directory = '/sys/fs/cgroup/blkio/docker/' + cont.docker_id
+      if not os.path.isdir(directory):
+        print 'Blkio not configured for container %s' %(cont.docker_id)
+        continue
+      stats_file = directory + '/blkio.throttle.io_serviced'
+      if not os.path.isfile(stats_file):
+        print 'Blkio not configured for container %s' %(cont.docker_id)
+        continue
+      # read and parse iops
+      with open(stats_file) as _:
+        lines = _.readlines()
+      for _ in lines:
+        if _.startswith(pattern):
+          iops = int(_.split()[2])
+          iops_used[cont.docker_id] = iops
+          break
+
+    return iops_used
