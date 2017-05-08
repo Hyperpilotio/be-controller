@@ -79,6 +79,7 @@ def ActiveContainers():
         if _.quota < min_be_quota or _.quota > max_be_quota:
           _.quota = min_be_quota
           cont.update(cpu_quota=_.quota)
+        stats.be_quota += _.quota
       else:
         stats.hp_cont += 1
         stats.hp_shares += _.shares
@@ -108,14 +109,15 @@ def ActiveContainers():
               active_containers[cid].k8s_pod_name = pod.metadata.name
               active_containers[cid].k8s_namespace = pod.metadata.namespace
               active_containers[cid].ipaddress = pod.status.pod_ip
-              # set period and quota if not set already
+              # set period and quota if unset, or set incorrectly
               if active_containers[cid].period != 100000:
                 active_containers[cid].period = 100000
                 active_containers[cid].docker.update(cpu_period=100000)
-              if active_containers[cid].quota == 0 or \
+              if active_containers[cid].quota < min_be_quota or \
                  active_containers[cid].quota > max_be_quota:
                 active_containers[cid].quota = int(min_be_quota)
                 active_containers[cid].docker.update(cpu_quota=min_be_quota)
+              stats.be_quota += active_containers[cid].quota
     except (ApiException, TypeError, ValueError):
       print "Cannot talk to K8S API server, labels unknown."
 
@@ -505,24 +507,27 @@ def __init__():
       "hp_cont": stats.hp_cont,
       "hp_shares": stats.hp_shares,
       "be_cont": stats.be_cont,
-      "be_shares": stats.be_shares
+      "be_shares": stats.be_shares,
+      "be_quota": stats.be_quota
     }
 
     if st.verbose:
-      print "CPU controller cycle", cycle, "at", at,
+      print "Quota controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
       print " Current state:"
-      print "  Qos app", st.node.qos_app, ", BE count", stats.be_cont
-      print "  SLO slack", slo_slack, ", Node CPU utilization", cpu_usage
+      print "  Qos app", st.node.qos_app, " BE count", stats.be_cont, " SLO slack", slo_slack, " Node CPU utilization", cpu_usage
+      print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
+      print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
 
     # grow, shrink or disable control
     if slo_slack < slack_threshold_reset and \
          stats.be_cont > 0:
-      quota_cycle_data["action"] = "disable_be"
+      quota_cycle_data["action"] = "reset_be"
       if st.verbose:
         print " Action: Resetting BE"
       ResetBE()
     elif slo_slack < slack_threshold_shrink and \
          stats.be_cont > 0:
+      quota_cycle_data["action"] = "shrink_be"
       if st.verbose:
         print " Action: Shrinking BE"
       ShrinkBE(slo_slack-slack_threshold_shrink)
@@ -550,13 +555,6 @@ def __init__():
       quota_cycle_data["action"] = "none"
       if st.verbose:
         print " Action: No change"
-
-    if st.verbose:
-      print "Quota controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
-      print " Current state:"
-      print "  Qos app", st.node.qos_app, ", slack", slo_slack, ", CPU utilization", cpu_usage
-      print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
-      print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
 
     if st.get_param('write_metrics', 'quota_controller', False) is True:
       st.stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)

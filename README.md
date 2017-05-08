@@ -30,11 +30,11 @@ If a configuration file is not given, it looks for `config.json` in the local di
 * "default_class": the default class for pods not labeled with `hyperpilot.io/wclass:XX` ("HP")
 * "period": the main controller period (5)
 * "slack_threshold_disable": the SLO slack below which we disable BE pods (-0.5)
-* "slack_threshold_disable": the SLO slack below which we disable BE pods (-0.2)
-* "slack_threshold_shrink": the SLO slack below which we shrink BE pods (0.05)
+* "slack_threshold_reset": the SLO slack below which we reset BE pods (-0.1)
+* "slack_threshold_shrink": the SLO slack below which we shrink BE pods (0.1)
 * "slack_threshold_grow": the SLO slack above which we enable or grow BE pods (0.2)
 * "load_threshold_shrink": the CPU load threshold after which we shrink BE pods (75.0)
-* "load_threshold_grow": the CPU load threshold to which we allow BE pods to grow (60.0)
+* "load_threshold_grow": the CPU load threshold to which we allow BE pods to grow (40.0)
 * "min_shares": the mimimum shares for a best effort controller, imposed by docker (2)
 * "BE_growth_rate": rate of increasing shares for BE pods (1.1)
 * "BE_shrink_rate": rate of decreasing shares for BE pods (0.8)
@@ -80,6 +80,4 @@ The BE controller uses uses the `hyperpilot.io/be-enabled` node label to indicat
 The controller assumes a K8S cluster. It can run within a pod (ctlloc:"in") or on the node directy (ctlloc:"out"). When it runs within a pod, it can find the right credentials for K8S on its own. When it turns outside of a pod, it assume the credentials are at `~/.kube/config`. 
 
 The controller assumes that the SLO for the HP pod monitored can be accessed from `qos-data-store:7781/v1/apps/metrics`. This is an issue when the controller is not running in a pod, as K8S DNS does not help with name resolution. 
-
-
 
