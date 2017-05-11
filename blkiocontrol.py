@@ -48,23 +48,19 @@ def BlkioControll():
       continue
 
     # get IOPS usage statistics
-    # and get IP of all active BE containers
+    # and get IDS of all active BE containers
     active_be_ids = set()
-    end_iop_stats = blkio.getIopUsed(st.active_containers)
-    end_time = dt.datetime.now()
-    elapsed_time = (end_time - start_time).total_seconds()
+    end_iop_stats = {}
     be_iop = 0
     hp_iop = 0
 
     for _, cont in st.active_containers.items():
+      end = blkio.getIopUsed(cont)
+      end_iop_stats[cont.docker_id] = end
       if cont.docker_id in start_iop_stats:
         start = start_iop_stats[cont.docker_id]
       else:
         start = 0
-      if cont.docker_id in end_iop_stats:
-        end = end_iop_stats[cont.docker_id]
-      else:
-        continue
       iop = end - start
       if cont.wclass == 'BE':
         be_iop += iop
@@ -72,9 +68,13 @@ def BlkioControll():
       else:
         hp_iop += iop
 
+    end_time = dt.datetime.now()
+    elapsed_time = (end_time - start_time).total_seconds()
     hp_iops = int(hp_iop/elapsed_time)
     be_iops = int(be_iop/elapsed_time)
     total_iops = hp_iops + be_iops
+
+    # reset stats for next cycle
     start_time = end_time
     start_iop_stats = end_iop_stats
 

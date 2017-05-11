@@ -28,110 +28,12 @@ import pycurl
 import docker
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+import store
 
 # hyperpilot imports
 import settings as st
 import netcontrol as net
 import blkiocontrol as blkio
-
-def ActiveContainers():
-  """ Identifies active containers in a docker environment.
-  """
-  min_shares = st.params['min_shares']
-  min_be_quota = int(st.node.cpu * 100000 * st.params['min_be_quota'])
-  max_be_quota = int(st.node.cpu * 100000 * st.params['max_be_quota'])
-  active_containers = {}
-  stats = st.ControllerStats()
-
-  # read container list from docker
-  try:
-    containers = st.node.denv.containers.list()
-  except docker.errors.APIError:
-    print "Cannot communicate with docker daemon, terminating."
-    sys.exit(-1)
-
-  for cont in containers:
-    try:
-      _ = st.Container()
-      _.docker_id = cont.id
-      _.docker_name = cont.name
-      _.docker = cont
-      # check container shares and quotas
-      _.quota = cont.attrs['HostConfig']['CpuQuota']
-      _.period = cont.attrs['HostConfig']['CpuPeriod']
-      _.shares = cont.attrs['HostConfig']['CpuShares']
-      # check that container has at least 2 shares
-      if _.shares < min_shares:
-        _.shares = min_shares
-        cont.update(cpu_shares=_.shares)
-      # check container class
-      if 'hyperpilot.io/wclass' in cont.attrs['Config']['Labels']:
-        _.wclass = cont.attrs['Config']['Labels']['hyperpilot.io/wclass']
-      if _.wclass == 'BE':
-        stats.be_cont += 1
-        # set min shares if incorrect
-        if _.shares != min_shares:
-          _.shares = min_shares
-          cont.update(cpu_shares=_.shares)
-        stats.be_shares += _.shares
-        # set period and quota if unset, or set incorrectly
-        if _.period != 100000:
-          cont.update(cpu_period=100000)
-        if _.quota < min_be_quota or _.quota > max_be_quota:
-          _.quota = min_be_quota
-          cont.update(cpu_quota=_.quota)
-      else:
-        stats.hp_cont += 1
-        stats.hp_shares += _.shares
-      # append to dictionary of active containers
-      active_containers[_.docker_id] = _
-    except docker.errors.APIError:
-      print "Problem with docker container"
-
-  # Check container class in K8S
-  if st.k8sOn:
-    # get all best effort pods
-    label_selector = 'hyperpilot.io/wclass = BE'
-    try:
-      pods = st.node.kenv.list_pod_for_all_namespaces(watch=False,\
-                                            label_selector=label_selector)
-      for pod in pods.items:
-        if pod.spec.node_name == st.node.name:
-          for cont in pod.status.container_statuses:
-            cid = cont.container_id[len('docker://'):]
-            if cid in active_containers:
-              if active_containers[cid].wclass == 'HP':
-                active_containers[cid].wclass = 'BE'
-                stats.be_cont += 1
-                stats.be_shares += active_containers[cid].shares
-                stats.hp_cont -= 1
-                stats.hp_shares -= active_containers[cid].shares
-              active_containers[cid].k8s_pod_name = pod.metadata.name
-              active_containers[cid].k8s_namespace = pod.metadata.namespace
-              active_containers[cid].ipaddress = pod.status.pod_ip
-              # set period and quota if not set already
-              if active_containers[cid].period != 100000:
-                active_containers[cid].period = 100000
-                active_containers[cid].docker.update(cpu_period=100000)
-              if active_containers[cid].quota == 0 or \
-                 active_containers[cid].quota > max_be_quota:
-                active_containers[cid].quota = int(min_be_quota)
-                active_containers[cid].docker.update(cpu_quota=min_be_quota)
-    except (ApiException, TypeError, ValueError):
-      print "Cannot talk to K8S API server, labels unknown."
-
-    # get first qos tracked workload on this node, if it exists
-    label_selector = 'hyperpilot.io/qos=true'
-    try:
-      pods = st.node.kenv.list_pod_for_all_namespaces(watch=False,\
-                                            label_selector=label_selector)
-      if len(pods.items) > 1:
-        print "Multiple QoS tracked workloads, ignoring all but first"
-      st.node.qos_app = pods.items[0].status.container_statuses[0].name
-    except (ApiException, TypeError, ValueError, IndexError):
-      print "Cannot find QoS service name"
-
-  return active_containers, stats
 
 
 def CpuStatsDocker():
@@ -425,7 +327,6 @@ def configK8S():
       print "Exception when calling CoreV1Api->read_node: %s\n" % e
       sys.exit(-1)
     st.node.cpu = int(_.status.capacity['cpu'])
-    EnableBE()
 
 
 def __init__():
@@ -438,6 +339,7 @@ def __init__():
   # initialize environment
   configDocker()
   configK8S()
+  EnableBE()
 
   # simpler parameters
   slack_threshold_disable = st.params['slack_threshold_disable']
@@ -448,23 +350,35 @@ def __init__():
   load_threshold_grow = st.params['load_threshold_grow']
   period = st.params['period']
 
+  stats_writer = store.InfluxWriter()
+
+  # launch watcher for active containers and pods
+  if st.verbose:
+    print "Starting K8S watcher"
+  try:
+    _ = threading.Thread(name='K8SWatch', target=st.ActiveContainers)
+    _.setDaemon(True)
+    _.start()
+  except threading.ThreadError:
+    print "Cannot start K8S watcher; terminating"
+    sys.exit(-1)
   # launch other controllers
-  if st.verbose:
-    print "Starting network controller"
-  try:
-    _ = threading.Thread(name='NetControll', target=net.NetControll)
-    _.setDaemon(True)
-    _.start()
-  except threading.ThreadError:
-    print "Cannot start network controller; continuing without it"
-  if st.verbose:
-    print "Starting blkio controller"
-  try:
-    _ = threading.Thread(name='BlkioControll', target=blkio.BlkioControll)
-    _.setDaemon(True)
-    _.start()
-  except threading.ThreadError:
-    print "Cannot start blkio controller; continuing without it"
+  #if st.verbose:
+  #  print "Starting network controller"
+  #try:
+  #  _ = threading.Thread(name='NetControll', target=net.NetControll)
+  #  _.setDaemon(True)
+  #  _.start()
+  #except threading.ThreadError:
+  #  print "Cannot start network controller; continuing without it"
+  #if st.verbose:
+  #  print "Starting blkio controller"
+  #try:
+  #  _ = threading.Thread(name='BlkioControll', target=blkio.BlkioControll)
+  #  _.setDaemon(True)
+  #  _.start()
+  #except threading.ThreadError:
+  #  print "Cannot start blkio controller; continuing without it"
 
 
   # control loop
@@ -485,9 +399,6 @@ def __init__():
     # check SLO slack from file
     slo_slack, latency = SloSlack(st.node.qos_app)
 
-    # get active containers and their class
-    st.active_containers, stats = ActiveContainers()
-
     # get CPU stats
     cpu_usage = CpuStats()
 
@@ -499,46 +410,44 @@ def __init__():
         "slack": slo_slack,
         "latency": latency,
         "cpu_usage": cpu_usage,
-        "hp_cont": stats.hp_cont,
-        "hp_shares": stats.hp_shares,
-        "be_cont": stats.be_cont,
-        "be_shares": stats.be_shares
+        "hp_pods": st.stats.hp_pods,
+        "be_pods": st.stats.be_pods
     }
 
     if st.verbose:
       print "CPU controller cycle", cycle, "at", at,
       print " Current state:"
-      print "  Qos app", st.node.qos_app, ", BE count", stats.be_cont
+      print "  Qos app", st.node.qos_app, ", BE count", st.stats.be_pods
       print "  SLO slack", slo_slack, ", Node CPU utilization", cpu_usage
 
     # grow, shrink or disable control
     if slo_slack < slack_threshold_reset and \
-         stats.be_cont > 0:
+         st.stats.be_pods > 0:
       quota_cycle_data["action"] = "disable_be"
       if st.verbose:
         print " Action: Resetting BE"
       ResetBE()
     elif slo_slack < slack_threshold_shrink and \
-         stats.be_cont > 0:
+         st.stats.be_pods > 0:
       if st.verbose:
         print " Action: Shrinking BE"
       ShrinkBE(slo_slack-slack_threshold_shrink)
     elif cpu_usage > load_threshold_shrink and \
-         stats.be_cont > 0:
+         st.stats.be_pods > 0:
       quota_cycle_data["action"] = "shrink_be"
       if st.verbose:
         print " Action: Shrinking BE"
       ShrinkBE(0)
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow and \
-         stats.be_cont == 0:
+         st.stats.be_pods == 0:
       quota_cycle_data["action"] = "enable_be"
       if st.verbose:
         print " Action: Enabling BE"
       EnableBE()
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow and \
-         stats.be_cont > 0:
+         st.stats.be_pods > 0:
       quota_cycle_data["action"] = "grow_be"
       if st.verbose:
         print " Action: Growing BE"
@@ -549,7 +458,7 @@ def __init__():
         print " Action: No change"
 
     if st.get_param('write_metrics', False) is True:
-      st.stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)
+      stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)
 
     cycle += 1
     time.sleep(period)

@@ -94,30 +94,26 @@ class BlkioClass(object):
         continue
 
 
-  def getIopUsed(self, active_containers):
-    """ Find IOPS used for each active containers
+  def getIopUsed(self, container):
+    """ Find IOPS used for an active containers
     """
-    # the output is a dictionary (container --> iops)
-    iops_used = {}
     pattern = self.block_dev + ' Total'
 
-    for cont in active_containers:
-      # check if directory and stats file exists
-      directory = '/sys/fs/cgroup/blkio/docker/' + cont.docker_id
-      if not os.path.isdir(directory):
-        print 'Blkio not configured for container %s' %(cont.docker_id)
-        continue
-      stats_file = directory + '/blkio.throttle.io_serviced'
-      if not os.path.isfile(stats_file):
-        print 'Blkio not configured for container %s' %(cont.docker_id)
-        continue
-      # read and parse iops
-      with open(stats_file) as _:
-        lines = _.readlines()
-      for _ in lines:
-        if _.startswith(pattern):
-          iops = int(_.split()[2])
-          iops_used[cont.docker_id] = iops
-          break
+    # check if directory and stats file exists
+    directory = '/sys/fs/cgroup/blkio/docker/' + str(container.docker_id)
+    if not os.path.isdir(directory):
+      print 'Blkio not configured for container %s' %(container.docker_id)
+      return 0
+    stats_file = directory + '/blkio.throttle.io_serviced'
+    if not os.path.isfile(stats_file):
+      print 'Blkio not configured for container %s' %(container.docker_id)
+      return 0
+    # read and parse iops
+    with open(stats_file) as _:
+      lines = _.readlines()
+    for _ in lines:
+      if _.startswith(pattern):
+        iops = int(_.split()[2])
+        break
 
-    return iops_used
+    return iops
