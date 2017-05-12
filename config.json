@@ -25,7 +25,7 @@
       "iface_cont": "weave",
       "link_bw_mbps" : 10000,
       "max_bw_mbps" : 700,
-      "disable": false,
+      "disabled": false,
       "write_metrics": false
     },
     "write_metrics": false
