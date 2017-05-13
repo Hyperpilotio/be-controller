@@ -350,13 +350,13 @@ def __init__():
   load_threshold_grow = st.params['load_threshold_grow']
   period = st.params['period']
 
-  stats_writer = store.InfluxWriter()
+  st.stats_writer = store.InfluxWriter()
 
   # launch watcher for active containers and pods
   if st.verbose:
     print "Starting K8S watcher"
   try:
-    _ = threading.Thread(name='K8SWatch', target=st.ActiveContainers)
+    _ = threading.Thread(name='K8SWatch', target=st.K8SWatch)
     _.setDaemon(True)
     _.start()
   except threading.ThreadError:
@@ -371,14 +371,14 @@ def __init__():
   #  _.start()
   #except threading.ThreadError:
   #  print "Cannot start network controller; continuing without it"
-  #if st.verbose:
-  #  print "Starting blkio controller"
-  #try:
-  #  _ = threading.Thread(name='BlkioControll', target=blkio.BlkioControll)
-  #  _.setDaemon(True)
-  #  _.start()
-  #except threading.ThreadError:
-  #  print "Cannot start blkio controller; continuing without it"
+  if st.verbose:
+    print "Starting blkio controller"
+  try:
+    _ = threading.Thread(name='BlkioControll', target=blkio.BlkioControll)
+    _.setDaemon(True)
+    _.start()
+  except threading.ThreadError:
+    print "Cannot start blkio controller; continuing without it"
 
 
   # control loop
@@ -396,6 +396,9 @@ def __init__():
       time.sleep(period)
       continue
 
+    # FIX - REMOVE
+    continue
+  
     # check SLO slack from file
     slo_slack, latency = SloSlack(st.node.qos_app)
 
@@ -410,44 +413,44 @@ def __init__():
         "slack": slo_slack,
         "latency": latency,
         "cpu_usage": cpu_usage,
-        "hp_pods": st.stats.hp_pods,
-        "be_pods": st.stats.be_pods
+        "hp_pods": st.active.hp_pods,
+        "be_pods": st.active.be_pods
     }
 
     if st.verbose:
       print "CPU controller cycle", cycle, "at", at,
       print " Current state:"
-      print "  Qos app", st.node.qos_app, ", BE count", st.stats.be_pods
+      print "  Qos app", st.node.qos_app, ", BE count", st.active.be_pods
       print "  SLO slack", slo_slack, ", Node CPU utilization", cpu_usage
 
     # grow, shrink or disable control
     if slo_slack < slack_threshold_reset and \
-         st.stats.be_pods > 0:
+         st.active.be_pods > 0:
       quota_cycle_data["action"] = "disable_be"
       if st.verbose:
         print " Action: Resetting BE"
       ResetBE()
     elif slo_slack < slack_threshold_shrink and \
-         st.stats.be_pods > 0:
+         st.active.be_pods > 0:
       if st.verbose:
         print " Action: Shrinking BE"
       ShrinkBE(slo_slack-slack_threshold_shrink)
     elif cpu_usage > load_threshold_shrink and \
-         st.stats.be_pods > 0:
+         st.active.be_pods > 0:
       quota_cycle_data["action"] = "shrink_be"
       if st.verbose:
         print " Action: Shrinking BE"
       ShrinkBE(0)
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow and \
-         st.stats.be_pods == 0:
+         st.active.be_pods == 0:
       quota_cycle_data["action"] = "enable_be"
       if st.verbose:
         print " Action: Enabling BE"
       EnableBE()
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow and \
-         st.stats.be_pods > 0:
+         st.active.be_pods > 0:
       quota_cycle_data["action"] = "grow_be"
       if st.verbose:
         print " Action: Growing BE"
@@ -458,7 +461,7 @@ def __init__():
         print " Action: No change"
 
     if st.get_param('write_metrics', False) is True:
-      stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)
+      st.stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)
 
     cycle += 1
     time.sleep(period)

@@ -13,7 +13,6 @@ __email__ = "christos@hyperpilot.io"
 __copyright__ = "Copyright 2017, HyperPilot Inc"
 
 import os
-import command_client as cc
 
 class BlkioClass(object):
   """This class performs IO bandwidth isolation using blkio I/O throttling.
@@ -28,40 +27,39 @@ class BlkioClass(object):
   def __init__(self, block_dev, max_iops, ctlloc):
     self.block_dev = block_dev
     self.max_iops = max_iops
-    self.cont_ids = set()
-    self.cc = cc.CommandClient(ctlloc)
+    self.keys = set()
 
     # check if blockio is active
-    if not os.path.isdir('/sys/fs/cgroup/blkio/docker'):
-      raise Exception('Blkio not configured for docker')
+    if not os.path.isdir('/sys/fs/cgroup/blkio/kubepods'):
+      raise Exception('Blkio not configured for K8S')
 
 
-  def addBeCont(self, cont_id):
+  def addBeCont(self, cont_key):
     """ Adds the long ID of a container to the list of BE containers throttled
     """
-    if cont_id in self.cont_ids:
-      raise Exception('Duplicate blkio throttling request %s' % cont_id)
+    if cont_key in self.keys:
+      raise Exception('Duplicate blkio throttling request %s' % cont_key)
     # check if blockio is active
-    directory = '/sys/fs/cgroup/blkio/docker/' + cont_id
+    directory = '/sys/fs/cgroup/blkio/' + cont_key
     if not os.path.isdir(directory):
-      print 'Blkio not setup correctly for container: '+ cont_id
-    self.cont_ids.add(cont_id)
+      print 'WARNING Blkio not setup correctly for container (add): '+ cont_key
+    self.keys.add(cont_key)
 
 
-  def removeBeCont(self, cont_id):
+  def removeBeCont(self, cont_key):
     """ Removes the long ID of a container from the list of BE containers throttled
     """
-    if cont_id not in self.cont_ids:
-      print 'Cannot remove from blkio non existing container %s' % cont_id
+    if cont_key not in self.keys:
+      print 'WARNING Cannot remove from blkio non existing container %s' % cont_key
     else:
-      self.cont_ids.remove(cont_id)
+      self.keys.remove(cont_key)
 
 
   def setIopsLimit(self, iops):
     """ Sets rad/write IOPS limit for BE containers
         Symmetric rd/write limit
     """
-    if len(self.cont_ids) == 0:
+    if len(self.keys) == 0:
       return
 
     if iops >= self.max_iops:
@@ -69,44 +67,48 @@ class BlkioClass(object):
 
     # heuristic: assuming N BE containers, allow each to BE job to use up to 1/N IOPS
     # a hierarchical cgroup would be better
-    limit = (int)(iops/len(self.cont_ids))
+    limit = (int)(iops/len(self.keys))
 
     # set the limit for every container
-    for cont in self.cont_ids:
-      directory = '/sys/fs/cgroup/blkio/docker/' + cont
+    for cont in self.keys:
+      directory = '/sys/fs/cgroup/blkio/' + cont
       rfile = directory + '/blkio.throttle.read_iops_device'
       wfile = directory + '/blkio.throttle.write_iops_device'
       if not os.path.isdir(directory) or \
          not os.path.isfile(rfile) or \
          not os.path.isfile(wfile):
-        print 'Blkio not setup correctly for container: '+ cont
+        print 'WARNING Blkio not setup correctly for container (limit): '+ cont
         continue
       # throttle string
-      cmd = "\"" + self.block_dev + ' ' + str(limit) + "\""
+      cmd = self.block_dev + ' ' + str(limit)
       # read limit
       try:
         with open(rfile, "w") as _:
           _.write(cmd)
         with open(wfile, "w") as _:
           _.write(cmd)
-      except EnvironmentError:
-        print 'Blkio not setup correctly for container: '+ cont
+      except EnvironmentError as e:
+        print 'WARNING Blkio not setup correctly for container (limit): '+ cont
+        print cmd
+        print wfile
+        print rfile
+        print e
         continue
 
 
-  def getIopUsed(self, container):
-    """ Find IOPS used for an active containers
+  def getIopUsed(self, cont_key):
+    """ Find IOPS used for an active container
     """
     pattern = self.block_dev + ' Total'
 
     # check if directory and stats file exists
-    directory = '/sys/fs/cgroup/blkio/docker/' + str(container.docker_id)
+    directory = '/sys/fs/cgroup/blkio/' + cont_key
     if not os.path.isdir(directory):
-      print 'Blkio not configured for container %s' %(container.docker_id)
+      print 'Blkio not configured for container %s' %(cont_key)
       return 0
     stats_file = directory + '/blkio.throttle.io_serviced'
     if not os.path.isfile(stats_file):
-      print 'Blkio not configured for container %s' %(container.docker_id)
+      print 'Blkio not configured for container %s' %(cont_key)
       return 0
     # read and parse iops
     with open(stats_file) as _:
@@ -115,5 +117,6 @@ class BlkioClass(object):
       if _.startswith(pattern):
         iops = int(_.split()[2])
         break
+      iops = 0
 
     return iops

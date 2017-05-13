@@ -26,12 +26,14 @@ def NetControll():
   # initialize controller
   if st.verbose:
     print "Starting NetControl (%s, %s, %f, %f)" \
-           % (st.params['iface_ext'], st.params['iface_cont'], st.params['max_bw_mbps'], st.params['link_bw_mbps'])
+           % (st.params['iface_ext'], st.params['iface_cont'], \
+              st.params['max_bw_mbps'], st.params['link_bw_mbps'])
   net = netclass.NetClass(st.params['iface_ext'], st.params['iface_cont'], \
                           st.params['max_bw_mbps'], st.params['link_bw_mbps'], \
                           st.params['ctlloc'])
   period = st.params['net_period']
   cycle = 0
+
   # control loop
   while 1:
 
@@ -47,9 +49,11 @@ def NetControll():
 
     # get IP of all active BE containers
     active_be_ips = set()
-    for _, cont in st.active_containers.items():
-      if cont.wclass == 'BE':
-        active_be_ips.add(cont.ipaddress)
+    st.active.lock.acquire_read()
+    for _, pod in st.active.pods.items():
+      if pod.wclass == 'BE':
+        active_be_ips.add(pod.ipaddress)
+    st.active.lock.release_read()
     # track BW usage of new containers
     new_ips = active_be_ips.difference(net.cont_ips)
     for _ in new_ips:
@@ -73,10 +77,10 @@ def NetControll():
       print "Net stats lost, bw_usage: " + str(bw_usage)
 
     net_cycle_data = {
-      "cycle": cycle,
-      "total_bw": total_bw,
-      "hp_bw": hp_bw,
-      "be_bw": be_bw
+        "cycle": cycle,
+        "total_bw": total_bw,
+        "hp_bw": hp_bw,
+        "be_bw": be_bw
     }
 
     at = dt.now().strftime('%H:%M:%S')

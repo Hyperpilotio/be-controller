@@ -11,6 +11,7 @@ import sys
 import threading
 import docker
 from kubernetes import watch
+import rwlock
 
 class Container(object):
   """ A class for tracking active containers
@@ -18,8 +19,6 @@ class Container(object):
   def __init__(self):
     self.docker_name = ''
     self.docker_id = 0
-    self.k8s_pod_name = ''
-    self.k8s_namespace = ''
     self.docker = None
     self.ipaddress = ''
     self.period = 0
@@ -27,12 +26,10 @@ class Container(object):
     self.cpu_percent = 0
 
   def __repr__(self):
-    return "<Container:%s pod:%s>" \
-           % (self.docker_name, self.k8s_pod_name)
+    return "<Container:%s pod:%s>" %(self.docker_name)
 
   def __str__(self):
-    return "<Container:%s pod:%s>" \
-           % (self.docker_name, self.k8s_pod_name)
+    return "<Container:%s pod:%s>" %(self.docker_name)
 
 class Pod(object):
   """ A class for tracking active pods
@@ -40,31 +37,134 @@ class Pod(object):
   def __init__(self):
     self.name = ''
     self.namespace = ''
+    self.uid = ''
     self.qosclass = ''
     self.wclass = ''
     self.ipaddress = ''
     self.container_ids = set()
     self.containers = {}
 
-class ControllerStats(object):
-  """ A class for tracking controller stats
+
+class ActivePods(object):
+  """ A class for tracking active pods
   """
   def __init__(self):
+    self.pods = {}
+    self.lock = rwlock.ReadWriteLock()
     self.hp_pods = 0
     self.be_pods = 0
-    self.hp_cpu_percent = 0
-    self.be_cpu_percent = 0
+
+  def delete_pod(self, key):
+    """ Stop tracking pod
+    """
+    pod = self.pods[key]
+    if pod.wclass == 'BE':
+      self.be_pods -= 1
+    else:
+      self.hp_pods -= 1
+    self.lock.acquire_write()
+    pod.containers.clear()
+    pod.container_ids.clear()
+    self.pods.pop(key)
+    self.lock.release_write()
+    if verbose:
+      print "K8SWatch: DELETED pod %s" %(key)
+
+  def add_pod(self, k8s_object, key):
+    """ Track new pod
+    """
+    if key in self.pods:
+      print "K8SWatch WARNING: Duplicate pod %s" %(key)
+    pod = Pod()
+    pod.name = k8s_object.metadata.name
+    pod.namespace = k8s_object.metadata.namespace
+    pod.uid = k8s_object.metadata.uid
+    pod.ipaddress = k8s_object.status.pod_ip
+    pod.qosclass = k8s_object.status.qos_class.lower()
+    pod.wclass = ExtractWClass(k8s_object)
+    if pod.wclass == 'BE' and pod.qosclass != 'besteffort':
+      print "K8SWatch WARNING: Pod %s is not BestEffort in K8S" %(key)
+    if pod.wclass == 'BE':
+      self.be_pods += 1
+    else:
+      self.hp_pods += 1
+    self.lock.acquire_write()
+    self.pods[key] = pod
+    self.lock.release_write()
+    if verbose:
+      print "K8SWatch ADDED pod %s (%s, %s)" %(key, pod.qosclass, pod.wclass)
+
+  def modify_pod(self, k8s_object, key, min_quota, max_quota):
+    """ Modify tracked pod
+    """
+    pod = self.pods[key]
+    # set with containers in event
+    new_cont = set()
+    for cont in k8s_object.status.container_statuses:
+      if not cont.container_id:
+        continue
+      cid = cont.container_id[len('docker://'):]
+      new_cont.add(cid)
+    added_cont = new_cont.difference(pod.container_ids)
+    deleted_cont = pod.container_ids.difference(new_cont)
+    # process all added containers
+    for _ in added_cont:
+      c = Container()
+      c.docker_id = _
+      c.ipaddress = k8s_object.status.pod_ip
+      try:
+        c.docker = node.denv.containers.get(_)
+      except (docker.errors.NotFound, docker.errors.APIError):
+        print "K8SWatch WARNING: Cannot find containers %s for pod %s" %(_, key)
+        continue
+      c.docker_name = c.docker.name
+      c.quota = c.docker.attrs['HostConfig']['CpuQuota']
+      c.period = c.docker.attrs['HostConfig']['CpuPeriod']
+      if pod.wclass == 'BE' and not c.period == 100000:
+        c.period = 100000
+        c.docker.update(cpu_period=100000)
+      if pod.wclass == 'BE' and (c.quota < min_quota or c.quota > max_quota):
+        c.quota = min_quota
+        c.docker.update(cpu_quota=c.quota)
+      self.lock.acquire_write()
+      pod.container_ids.add(_)
+      pod.containers[_] = c
+      self.lock.release_write()
+    # process all deleted containers
+    self.lock.acquire_write()
+    for _ in deleted_cont:
+      pod.containers.pop(_)
+      pod.container_ids.remove(_)
+    self.lock.release_write()
+    if verbose:
+      print "K8SWatch UPDATED pod %s (%s, %s)" %(key, pod.qosclass, pod.wclass)
 
 
 class NodeInfo(object):
   """ A class for tracking node stats
   """
   def __init__(self):
+    # config
     self.cpu = 0
     self.name = ''
     self.qos_app = ''
     self.kenv = None
     self.denv = None
+    # stats
+    self.hp_cpu_percent = 0
+    self.be_cpu_percent = 0
+
+
+def ExtractWClass(item):
+  """ Extracts metadata label from V1Pod object
+  """
+  try:
+    if item.metadata.labels['hyperpilot.io/wclass'] == 'BE':
+      return 'BE'
+    else:
+      return 'HP'
+  except (KeyError, NameError):
+    return 'HP'
 
 # globals
 # controller parameters
@@ -77,30 +177,17 @@ def get_param(name, default):
     return params[name]
   return default
 # all active containers and pods
-active_pods = {}
-active_pods_rlock = threading.RLock()
+active = ActivePods()
 # node info
 node = NodeInfo()
-# node stats
-stats = ControllerStats()
+# stats writer
+stats_writer = None
 
-def ExtractWClass(pod):
-  """ Extract Hyperpilot workload class.
-  """
-  try:
-    if pod.metadata.labels['hyperpilot.io/wclass'] == 'BE':
-      return 'BE'
-    else:
-      return 'HP'
-  except (KeyError, NameError):
-    return 'HP'
-
-
-def ActiveContainers():
+def K8SWatch():
   """ Maintains the list of active containers.
   """
-  min_be_quota = int(node.cpu * 100000 * params['min_be_quota'])
-  max_be_quota = int(node.cpu * 100000 * params['max_be_quota'])
+  min_quota = int(node.cpu * 100000 * params['min_be_quota'])
+  max_quota = int(node.cpu * 100000 * params['max_be_quota'])
 
   w = watch.Watch()
   selector = ''
@@ -109,135 +196,55 @@ def ActiveContainers():
   # infinite loop listening to K8S pod events
   for event in w.stream(node.kenv.list_pod_for_all_namespaces,\
                         timeout_seconds=timeout, label_selector=selector):
-    # type of event
-    pod = event['object']
-    pod_key = pod.metadata.namespace + '/' + pod.metadata.name
+    k8s_object = event['object']
+    pod_key = k8s_object.metadata.namespace + '/' + k8s_object.metadata.name
     modify_event = (event['type'] == 'MODIFIED')
     add_event = (event['type'] == 'ADDED')
-    delete_event = (event['type'] == 'DELETED')
-    delete_event |= pod.status.phase == 'Succeeded'
-    delete_event |= pod.status.phase == 'Failed'
-    if verbose:
-      print "Watcher: pods %d" %(len(active_pods))
-      print "Event: %s %s" % (event['type'], pod_key)
+    delete_event = (event['type'] == 'DELETED') or (k8s_object.status.phase == 'Succeeded') \
+                   or (k8s_object.status.phase == 'Failed')
 
     # check if this the QoS app and needs to be tracked
     try:
-      if pod.metadata.labels['hyperpilot.io/qos'] == 'true':
+      if k8s_object.metadata.labels['hyperpilot.io/qos'] == 'true':
         if add_event or modify_event:
-          node.qos_app = pod.status.container_statuses[0].name
+          node.qos_app = k8s_object.status.container_statuses[0].name
           if verbose:
-            print "Found QoS workload %s" %node.qos_app
+            print "K8SWatch Found QoS workload %s" %node.qos_app
         elif delete_event:
           if verbose:
-            print "Deleting QoS workload %s" %pod_key
+            print "K8SWatch Deleting QoS workload %s" %pod_key
           node.qos_app = ''
     except (KeyError, NameError):
       pass
 
     # skip all events for pods for on different/unspecified nodes
-    if not pod.spec.node_name == node.name:
+    if not k8s_object.spec.node_name == node.name:
       continue
+    if verbose:
+      print "K8SWatch Watcher (%d): %s %s" % (len(active.pods), event['type'], pod_key)
 
-    # determine the processing needed (add, modify, delete)
-    add_pod = False
-    delete_pod = False
-    modify_pod = False
-    tracked_pod = (pod_key in active_pods)
-    has_containers = (pod.status.container_statuses) and \
-                     len(pod.status.container_statuses) and \
-                     (pod.status.container_statuses[0].container_id)
-    if (add_event or modify_event) and  (not tracked_pod) and has_containers:
-      add_pod = True
-    if (add_event or modify_event) and has_containers:
-      modify_pod = True
-    if delete_event and tracked_pod:
-      delete_pod = True
+    # type of event and processing needed
+    tracked_pod = (pod_key in active.pods)
+    has_containers = (k8s_object.status.container_statuses) and \
+                     len(k8s_object.status.container_statuses) and \
+                     (k8s_object.status.container_statuses[0].container_id)
+    add_pod = (add_event or modify_event) and  (not tracked_pod) and has_containers
+    modify_pod = (add_event or modify_event) and has_containers
+    delete_pod = delete_event and tracked_pod
     if not(add_pod or modify_pod or delete_pod):
       continue
 
     # add new pod
     if add_pod:
-      p = Pod()
-      p.name = pod.metadata.name
-      p.namespace = pod.metadata.namespace
-      p.ipaddress = pod.status.pod_ip
-      p.qosclass = pod.status.qos_class
-      p.wclass = ExtractWClass(pod)
-      if p.wclass == 'BE' and p.qosclass != 'BestEffort':
-        print "WARNING: Pod %s in namespace %s is not BestEffort in K8S" %(p.name, p.namespace)
-      if p.wclass == 'BE':
-        stats.be_pods += 1
-      else:
-        stats.hp_pods += 1
-      active_pods_rlock.acquire()
-      active_pods[pod_key] = p
-      active_pods_rlock.release()
-      if verbose:
-        print "ADDED pod %s (%s, %s)" %(pod_key, p.qosclass, p.wclass)
-
+      active.add_pod(k8s_object, pod_key)
     # modify pod
     if modify_pod:
-      p = active_pods[pod_key]
-      # set with containers in event
-      new_set = set()
-      for cont in pod.status.container_statuses:
-        if not cont.container_id:
-          continue
-        cid = cont.container_id[len('docker://'):]
-        new_set.add(cid)
-      added_cont = new_set.difference(p.container_ids)
-      deleted_cont = p.container_ids.difference(new_set)
-      # process all added containers
-      for _ in added_cont:
-        c = Container()
-        c.docker_id = _
-        c.k8s_pod_name = pod.metadata.name
-        c.k8s_namespace = pod.metadata.namespace
-        c.ipaddress = pod.status.pod_ip
-        try:
-          c.docker = node.denv.containers.get(_)
-        except (docker.errors.NotFound, docker.errors.APIError):
-          print "WARNING: Cannot find containers %s for pod %s" %(_, pod_key)
-          continue
-        c.docker_name = c.docker.name
-        c.quota = c.docker.attrs['HostConfig']['CpuQuota']
-        c.period = c.docker.attrs['HostConfig']['CpuPeriod']
-        if p.wclass == 'BE' and not p.period == 100000:
-          c.period = 100000
-          c.docker.update(cpu_period=100000)
-        if p.wclass == 'BE' and (c.quota < min_be_quota or c.quota > max_be_quota):
-          c.quota = min_be_quota
-          c.docker.update(cpu_quota=c.quota)
-        active_pods_rlock.acquire()
-        p.container_ids.add(_)
-        p.containers[_] = c
-        active_pods_rlock.release()
-      # process all deleted containers
-      active_pods_rlock.acquire()
-      for _ in deleted_cont:
-        p.containers.pop(_)
-        p.container_ids.remove(_)
-      active_pods_rlock.release()
-      if verbose:
-        print "UPDATED pod %s (%s, %s)" %(pod_key, p.qosclass, p.wclass)
-
+      active.modify_pod(k8s_object, pod_key, min_quota, max_quota)
     # remove a pod
     if delete_pod:
-      p = active_pods[pod_key]
-      if p.wclass == 'BE':
-        stats.be_pods -= 1
-      else:
-        stats.hp_pods -= 1
-      active_pods_rlock.acquire()
-      p.containers.clear()
-      p.container_ids.clear()
-      active_pods.pop(pod_key)
-      active_pods_rlock.release()
-      if verbose:
-        print "DELETED pod %s" %(pod.metadata.name)
+      active.delete_pod(pod_key)
 
 
   #not watching K8S anymore
-  print "ERROR: cannot watch K8S pods stream anynore, terminating"
+  print "K8SWatch ERROR: cannot watch K8S pods stream anynore, terminating"
   sys.exit(-1)

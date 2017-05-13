@@ -47,24 +47,36 @@ def BlkioControll():
       time.sleep(period)
       continue
 
-    # get IOPS usage statistics
-    # and get IDS of all active BE containers
+    #Get IDS of all active containers
+    active_ids = set()
     active_be_ids = set()
+    st.active.lock.acquire_read()
+    for _, pod in st.active.pods.items():
+      if pod.qosclass == 'guaranteed':
+        root = 'kubepods/' + 'pod' + pod.uid + '/'
+      else: 
+        root = 'kubepods/' + pod.qosclass.lower() + '/pod' + pod.uid + '/'
+      for cont in pod.container_ids:
+        key = root + cont
+        active_ids.add(key)
+        if pod.wclass == 'BE':
+          active_be_ids.add(key)
+    st.active.lock.release_read()
+
+    # get IOPS usage statistics
     end_iop_stats = {}
     be_iop = 0
     hp_iop = 0
-
-    for _, cont in st.active_containers.items():
-      end = blkio.getIopUsed(cont)
-      end_iop_stats[cont.docker_id] = end
-      if cont.docker_id in start_iop_stats:
-        start = start_iop_stats[cont.docker_id]
+    for key in active_ids:
+      end = blkio.getIopUsed(key)
+      end_iop_stats[key] = end
+      if key in start_iop_stats:
+        start = start_iop_stats[key]
       else:
         start = 0
       iop = end - start
-      if cont.wclass == 'BE':
+      if key in active_be_ids:
         be_iop += iop
-        active_be_ids.add(cont.docker_id)
       else:
         hp_iop += iop
 
@@ -79,10 +91,10 @@ def BlkioControll():
     start_iop_stats = end_iop_stats
 
     # track BW usage of new containers
-    new_ids = active_be_ids.difference(blkio.cont_ids)
+    new_ids = active_be_ids.difference(blkio.keys)
     for _ in new_ids:
       blkio.addBeCont(_)
-    old_ids = blkio.cont_ids.difference(active_be_ids)
+    old_ids = blkio.keys.difference(active_be_ids)
     for _ in old_ids:
       blkio.removeBeCont(_)
 
