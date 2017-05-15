@@ -28,134 +28,36 @@ import pycurl
 import docker
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+import store
 
 # hyperpilot imports
 import settings as st
 import netcontrol as net
-
-def ActiveContainers():
-  """ Identifies active containers in a docker environment.
-  """
-  min_shares = st.params['quota_controller']['min_shares']
-  min_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['min_be_quota'])
-  max_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['max_be_quota'])
-  active_containers = {}
-  stats = st.ControllerStats()
-
-  # read container list from docker
-  try:
-    containers = st.node.denv.containers.list()
-  except docker.errors.APIError:
-    print "Cannot communicate with docker daemon, terminating."
-    sys.exit(-1)
-
-  for cont in containers:
-    try:
-      _ = st.Container()
-      _.docker_id = cont.id
-      _.docker_name = cont.name
-      _.docker = cont
-      # check container shares and quotas
-      _.quota = cont.attrs['HostConfig']['CpuQuota']
-      _.period = cont.attrs['HostConfig']['CpuPeriod']
-      _.shares = cont.attrs['HostConfig']['CpuShares']
-      # check that container has at least 2 shares
-      if _.shares < min_shares:
-        _.shares = min_shares
-        cont.update(cpu_shares=_.shares)
-      # check container class
-      if 'hyperpilot.io/wclass' in cont.attrs['Config']['Labels']:
-        _.wclass = cont.attrs['Config']['Labels']['hyperpilot.io/wclass']
-      if _.wclass == 'BE':
-        stats.be_cont += 1
-        # set min shares if incorrect
-        if _.shares != min_shares:
-          _.shares = min_shares
-          cont.update(cpu_shares=_.shares)
-        stats.be_shares += _.shares
-        # set period and quota if unset, or set incorrectly
-        if _.period != 100000:
-          cont.update(cpu_period=100000)
-        if _.quota < min_be_quota or _.quota > max_be_quota:
-          _.quota = min_be_quota
-          cont.update(cpu_quota=_.quota)
-        stats.be_quota += _.quota
-      else:
-        stats.hp_cont += 1
-        stats.hp_shares += _.shares
-      # append to dictionary of active containers
-      active_containers[_.docker_id] = _
-    except docker.errors.APIError:
-      print "Problem with docker container"
-
-  # Check container class in K8S
-  if st.k8sOn:
-    # get all best effort pods
-    label_selector = 'hyperpilot.io/wclass = BE'
-    try:
-      pods = st.node.kenv.list_pod_for_all_namespaces(watch=False,\
-                                            label_selector=label_selector)
-      for pod in pods.items:
-        if pod.spec.node_name == st.node.name:
-          for cont in pod.status.container_statuses:
-            cid = cont.container_id[len('docker://'):]
-            if cid in active_containers:
-              if active_containers[cid].wclass == 'HP':
-                active_containers[cid].wclass = 'BE'
-                stats.be_cont += 1
-                stats.be_shares += active_containers[cid].shares
-                stats.hp_cont -= 1
-                stats.hp_shares -= active_containers[cid].shares
-              active_containers[cid].k8s_pod_name = pod.metadata.name
-              active_containers[cid].k8s_namespace = pod.metadata.namespace
-              active_containers[cid].ipaddress = pod.status.pod_ip
-              # set period and quota if unset, or set incorrectly
-              if active_containers[cid].period != 100000:
-                active_containers[cid].period = 100000
-                active_containers[cid].docker.update(cpu_period=100000)
-              if active_containers[cid].quota < min_be_quota or \
-                 active_containers[cid].quota > max_be_quota:
-                active_containers[cid].quota = int(min_be_quota)
-                active_containers[cid].docker.update(cpu_quota=min_be_quota)
-              stats.be_quota += active_containers[cid].quota
-    except (ApiException, TypeError, ValueError):
-      print "Cannot talk to K8S API server, labels unknown."
-
-    # get first qos tracked workload on this node, if it exists
-    label_selector = 'hyperpilot.io/qos=true'
-    try:
-      pods = st.node.kenv.list_pod_for_all_namespaces(watch=False,\
-                                            label_selector=label_selector)
-      if len(pods.items) > 1:
-        print "Multiple QoS tracked workloads, ignoring all but first"
-      st.node.qos_app = pods.items[0].status.container_statuses[0].name
-    except (ApiException, TypeError, ValueError, IndexError):
-      print "Cannot find QoS service name"
-
-  return active_containers, stats
+import blkiocontrol as blkio
 
 
 def CpuStatsDocker():
   """Calculates CPU usage for the node using container statistics from Docker APIs
   """
   cpu_usage = 0.0
-  for _, cont in st.active_containers.items():
-    try:
-      percent = 0.0
-      new_stats = cont.docker.stats(stream=False, decode=True)
-      new_cpu_stats = new_stats['cpu_stats']
-      past_cpu_stats = new_stats['precpu_stats']
-      cpu_delta = float(new_cpu_stats['cpu_usage']['total_usage']) - \
-                  float(past_cpu_stats['cpu_usage']['total_usage'])
-      system_delta = float(new_cpu_stats['system_cpu_usage']) - \
-                     float(past_cpu_stats['system_cpu_usage'])
-      # The percentages are system-wide, not scaled per core
-      if (system_delta > 0.0) and (cpu_delta > 0.0):
-        percent = (cpu_delta / system_delta) * 100.0
-      cont.cpu_percent = percent
-      cpu_usage += percent
-    except docker.errors.APIError:
-      print "Problem with docker container %s" % cont.docker_name
+  for _, pod in st.active.pods.items():
+    for _, cont in pod.containers().items():
+      try:
+        percent = 0.0
+        new_stats = cont.docker.stats(stream=False, decode=True)
+        new_cpu_stats = new_stats['cpu_stats']
+        past_cpu_stats = new_stats['precpu_stats']
+        cpu_delta = float(new_cpu_stats['cpu_usage']['total_usage']) - \
+                    float(past_cpu_stats['cpu_usage']['total_usage'])
+        system_delta = float(new_cpu_stats['system_cpu_usage']) - \
+                       float(past_cpu_stats['system_cpu_usage'])
+        # The percentages are system-wide, not scaled per core
+        if (system_delta > 0.0) and (cpu_delta > 0.0):
+          percent = (cpu_delta / system_delta) * 100.0
+        cont.cpu_percent = percent
+        cpu_usage += percent
+      except docker.errors.APIError:
+        print "Problem with docker container %s" % cont.docker_name
   return cpu_usage
 
 
@@ -259,21 +161,22 @@ def DisableBE():
   """
   if st.k8sOn:
     body = client.V1DeleteOptions()
-  # kill BE containers
-  for _, cont in st.active_containers.items():
-    if cont.wclass == 'BE':
+  # kill BE pods
+  for _, pod in st.active.pods.items():
+    if pod.wclass == 'BE':
       # K8s delete pod
       if st.k8sOn:
         try:
-          _ = st.node.kenv.delete_namespaced_pod(cont.k8s_pod_name, \
-                  cont.k8s_namespace, body, grace_period_seconds=0, \
+          _ = st.node.kenv.delete_namespaced_pod(pod.name, \
+                  pod.namespace, body, grace_period_seconds=0, \
                   orphan_dependents=True)
         except ApiException as e:
           print "Cannot kill K8S BE pod: %s\n" % e
       else:
       # docker kill container
         try:
-          cont.docker.kill()
+          for _, cont in pod.containers.items():
+            cont.docker.kill()
         except docker.errors.APIError:
           print "Cannot kill container %s" % cont.name
 
@@ -292,15 +195,16 @@ def ResetBE():
   """
   min_be_quota = int(st.node.cpu * 100000 * st.params["quota_controller"]['min_be_quota'])
 
-  for _, cont in st.active_containers.items():
-    if cont.wclass == 'BE':
-      old_quota = cont.quota
-      cont.quota = min_be_quota
-      try:
-        cont.docker.update(cpu_quota=cont.quota)
-        print "Reset CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
-      except docker.errors.APIError as e:
-        print "Cannot update quota for container %s: %s" % (str(cont), e)
+  for _, pod in st.active.pods.items():
+    for _, cont in pod.containers.items():
+      if pod.wclass == 'BE':
+        old_quota = cont.quota
+        cont.quota = min_be_quota
+        try:
+          cont.docker.update(cpu_quota=cont.quota)
+          print "Reset CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
+        except docker.errors.APIError as e:
+          print "Cannot update quota for container %s: %s" % (str(cont), e)
 
 
 def GrowBE(slack):
@@ -310,18 +214,23 @@ def GrowBE(slack):
   be_growth_ratio = st.params['quota_controller']['BE_growth_ratio']
   be_growth_rate = 1 + be_growth_ratio * slack
   max_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['max_be_quota'])
-  for _, cont in st.active_containers.items():
-    if cont.wclass == 'BE':
-      old_quota = cont.quota
-      cont.quota = int(be_growth_rate * cont.quota)
-      # We limit each BE container to a max quota
-      if cont.quota > max_be_quota:
-        cont.quota = max_be_quota
-      try:
-        cont.docker.update(cpu_quota=cont.quota)
-        print "Grow CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
-      except docker.errors.APIError as e:
-        print "Cannot update quota for container %s: %s" % (str(cont), e)
+
+  aggregate_be_quota = 0
+  for _, pod in st.active.pods.items():
+    for _, cont in pod.containers.items():
+      if pod.wclass == 'BE':
+        old_quota = cont.quota
+        cont.quota = int(be_growth_rate * cont.quota)
+        # We limit each BE container to a max quota
+        if cont.quota > max_be_quota:
+          cont.quota = max_be_quota
+        try:
+          cont.docker.update(cpu_quota=cont.quota)
+          print "Grow CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
+        except docker.errors.APIError as e:
+          print "Cannot update quota for container %s: %s" % (str(cont), e)
+        aggregate_be_quota += cont.quota
+  st.node.be_quota = aggregate_be_quota
 
 
 def ShrinkBE(slack):
@@ -335,17 +244,23 @@ def ShrinkBE(slack):
       be_shrink_rate = 1 + be_shrink_ratio * slack
   min_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['min_be_quota'])
 
-  for _, cont in st.active_containers.items():
-    if cont.wclass == 'BE':
-      old_quota = cont.quota
-      cont.quota = int(be_shrink_rate * cont.quota)
-      if cont.quota < min_be_quota:
-        cont.quota = min_be_quota
-      try:
-        cont.docker.update(cpu_quota=cont.quota)
-        print "Shrink CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
-      except docker.errors.APIError as e:
-        print "Cannot update quota for container %s: %s" % (str(cont), e)
+  aggregate_be_quota = 0
+  for _, pod in st.active.pods.items():
+    for _, cont in pod.containers.items():
+      if pod.wclass == 'BE':
+        old_quota = cont.quota
+        cont.quota = int(be_shrink_rate * cont.quota)
+        if cont.quota < min_be_quota:
+          cont.quota = min_be_quota
+        try:
+          cont.docker.update(cpu_quota=cont.quota)
+          print "Shrink CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
+        except docker.errors.APIError as e:
+          print "Cannot update quota for container %s: %s" % (str(cont), e)
+        aggregate_be_quota += cont.quota
+
+  st.node.be_quota = aggregate_be_quota
+
 
 
 def ParseArgs():
@@ -426,7 +341,6 @@ def configK8S():
       print "Exception when calling CoreV1Api->read_node: %s\n" % e
       sys.exit(-1)
     st.node.cpu = int(_.status.capacity['cpu'])
-    EnableBE()
 
 
 def __init__():
@@ -451,6 +365,7 @@ def __init__():
   # initialize environment
   configDocker()
   configK8S()
+  EnableBE()
 
   # simpler parameters
   slack_threshold_disable = st.params['quota_controller']['slack_threshold_disable']
@@ -461,6 +376,18 @@ def __init__():
   load_threshold_grow = st.params['quota_controller']['load_threshold_grow']
   period = st.params['quota_controller']['period']
 
+  st.stats_writer = store.InfluxWriter()
+
+  # launch watcher for active containers and pods
+  if st.verbose:
+    print "Starting K8S watcher"
+  try:
+    _ = threading.Thread(name='K8SWatch', target=st.K8SWatch)
+    _.setDaemon(True)
+    _.start()
+  except threading.ThreadError:
+    print "Cannot start K8S watcher; terminating"
+    sys.exit(-1)
   # launch other controllers
   if st.verbose:
     print "Starting network controller"
@@ -470,6 +397,14 @@ def __init__():
     _.start()
   except threading.ThreadError:
     print "Cannot start network controller; continuing without it"
+  if st.verbose:
+    print "Starting blkio controller"
+  try:
+    _ = threading.Thread(name='BlkioControll', target=blkio.BlkioControll)
+    _.setDaemon(True)
+    _.start()
+  except threading.ThreadError:
+    print "Cannot start blkio controller; continuing without it"
 
 
   # control loop
@@ -490,67 +425,69 @@ def __init__():
     # check SLO slack from file
     slo_slack, latency = SloSlack(st.node.qos_app)
 
-    # get active containers and their class
-    st.active_containers, stats = ActiveContainers()
-
     # get CPU stats
     cpu_usage = CpuStats()
 
     at = dt.now().strftime('%H:%M:%S')
 
     quota_cycle_data = {
-      "cycle": cycle,
-      "qos_app": st.node.qos_app,
-      "slack": slo_slack,
-      "latency": latency,
-      "cpu_usage": cpu_usage,
-      "hp_cont": stats.hp_cont,
-      "hp_shares": stats.hp_shares,
-      "be_cont": stats.be_cont,
-      "be_shares": stats.be_shares,
-      "be_quota": stats.be_quota
+        "cycle": cycle,
+        "qos_app": st.node.qos_app,
+        "slack": slo_slack,
+        "latency": latency,
+        "cpu_usage": cpu_usage,
+        "hp_pods": st.active.hp_pods,
+        "be_pods": st.active.be_pods,
+        "be_quota": st.node.be_quota
     }
 
     if st.verbose:
       print "Quota controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
       print " Current state:"
-      print "  Qos app", st.node.qos_app, " BE count", stats.be_cont, " SLO slack", slo_slack, " Node CPU utilization", cpu_usage
-      print "  HP (%d): %d shares" % (stats.hp_cont, stats.hp_shares)
-      print "  BE (%d): %d shares" % (stats.be_cont, stats.be_shares)
+      print "  Qos app", st.node.qos_app, " SLO slack", slo_slack, " CPU utilization", cpu_usage
+      print "  HP (%d)" % (st.active.hp_pods)
+      print "  BE (%d): %d quota" % (st.active.be_pods, st.node.be_quota)
 
     # grow, shrink or disable control
-    if slo_slack < slack_threshold_reset and \
-         stats.be_cont > 0:
+    # Disable
+    if slo_slack < slack_threshold_disable and st.active.be_pods:
+      quota_cycle_data["action"] = "disable_be"
+      if st.verbose:
+        print " Action: Disabling BE"
+      DisableBE()
+    # Reset to minimum
+    elif slo_slack < slack_threshold_reset and st.active.be_pods:
       quota_cycle_data["action"] = "reset_be"
       if st.verbose:
         print " Action: Resetting BE"
       ResetBE()
-    elif slo_slack < slack_threshold_shrink and \
-         stats.be_cont > 0:
+    # Shrink quota due to slack
+    elif slo_slack < slack_threshold_shrink and st.active.be_pods:
       quota_cycle_data["action"] = "shrink_be"
       if st.verbose:
         print " Action: Shrinking BE"
       ShrinkBE(slo_slack-slack_threshold_shrink)
-    elif cpu_usage > load_threshold_shrink and \
-         stats.be_cont > 0:
+    # Shrink quota due to high utilization
+    elif cpu_usage > load_threshold_shrink and st.active.be_pods:
       quota_cycle_data["action"] = "shrink_be"
       if st.verbose:
         print " Action: Shrinking BE"
       ShrinkBE(0)
+    # Enable best effort
     elif slo_slack > slack_threshold_grow and \
-         cpu_usage < load_threshold_grow and \
-         stats.be_cont == 0:
+         cpu_usage < load_threshold_grow and not st.active.be_pods:
       quota_cycle_data["action"] = "enable_be"
       if st.verbose:
         print " Action: Enabling BE"
       EnableBE()
+    # Grow best effort
     elif slo_slack > slack_threshold_grow and \
-         cpu_usage < load_threshold_grow and \
-         stats.be_cont > 0:
+      cpu_usage < load_threshold_grow and st.active.be_pods:
       quota_cycle_data["action"] = "grow_be"
       if st.verbose:
         print " Action: Growing BE"
       GrowBE(slo_slack)
+    # Default
     else:
       quota_cycle_data["action"] = "none"
       if st.verbose:

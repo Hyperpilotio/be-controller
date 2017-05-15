@@ -12,7 +12,6 @@ __author__ = "Christos Kozyrakis"
 __email__ = "christos@hyperpilot.io"
 __copyright__ = "Copyright 2017, HyperPilot Inc"
 
-import subprocess
 import re
 import time
 import datetime as dt
@@ -39,7 +38,7 @@ class NetClass(object):
     self.mark = 6
 
     # reset IP tables
-    out, err = self.cc.run_command('iptables -t mangle -F')
+    _, err = self.cc.run_command('iptables -t mangle -F')
     if err:
       raise Exception('Could not reset iptables: ' + err)
 
@@ -50,17 +49,16 @@ class NetClass(object):
     # need to disable/enable HTB to get the stats working
 
     success = self.cc.run_commands([
-      'tc qdisc add dev %s root handle 1: htb default 1' % self.iface_ext,
-      'echo 1 > /sys/module/sch_htb/parameters/htb_rate_est',
-      'tc qdisc del dev %s root' % self.iface_ext,
-      'tc qdisc add dev %s root handle 1: htb default 1' % self.iface_ext,
-      'tc class add dev %s parent 1: classid 1:1 htb rate %dmbit ceil %dmbit' \
-                               % (self.iface_ext, self.link_bw_mbps, self.link_bw_mbps),
-      'tc class add dev %s parent 1: classid 1:10 htb rate %dmbit ceil %dmbit' \
-                               % (self.iface_ext, self.max_bw_mbps, self.max_bw_mbps),
-      'tc filter add dev %s parent 1: protocol all prio 10 handle %d fw flowid 1:10' \
-                               % (self.iface_ext, self.mark)
-      ])
+        'tc qdisc add dev %s root handle 1: htb default 1' % self.iface_ext,
+        'echo 1 > /sys/module/sch_htb/parameters/htb_rate_est',
+        'tc qdisc del dev %s root' % self.iface_ext,
+        'tc qdisc add dev %s root handle 1: htb default 1' % self.iface_ext,
+        'tc class add dev %s parent 1: classid 1:1 htb rate %dmbit ceil %dmbit' \
+                        % (self.iface_ext, self.link_bw_mbps, self.link_bw_mbps),
+        'tc class add dev %s parent 1: classid 1:10 htb rate %dmbit ceil %dmbit' \
+                        % (self.iface_ext, self.max_bw_mbps, self.max_bw_mbps),
+        'tc filter add dev %s parent 1: protocol all prio 10 handle %d fw flowid 1:10' \
+                        % (self.iface_ext, self.mark)])
 
     if not success:
       raise Exception('Could not setup htb qdisc')
@@ -73,7 +71,7 @@ class NetClass(object):
       raise Exception('Duplicate filter for IP %s' % cont_ip)
     self.cont_ips.add(cont_ip)
 
-    out, err = self.cc.run_command('iptables -t mangle -A PREROUTING -i %s -s %s -j MARK --set-mark %d' \
+    _, err = self.cc.run_command('iptables -t mangle -A PREROUTING -i %s -s %s -j MARK --set-mark %d' \
                                % (self.iface_cont, cont_ip, self.mark))
     if err:
       raise Exception('Could not add iptable filter for %s: %s' % (cont_ip, err))
@@ -86,7 +84,7 @@ class NetClass(object):
       raise Exception('Not existing filter for %s' % cont_ip)
     self.cont_ips.remove(cont_ip)
 
-    out, err = self.cc.run_command('iptables -t mangle -D PREROUTING -i %s -s %s -j MARK --set-mark %d' \
+    _, err = self.cc.run_command('iptables -t mangle -D PREROUTING -i %s -s %s -j MARK --set-mark %d' \
                                % (self.iface_cont, cont_ip, self.mark))
     if err:
       raise Exception('Could not add iptable filter for %s: %s' % (cont_ip, err))
@@ -95,7 +93,7 @@ class NetClass(object):
   def setBwLimit(self, bw_mbps):
     # replace always work for tc filter
 
-    out, err = self.cc.run_command('tc class replace dev %s parent 1: classid 1:10 htb rate %dmbit ceil %dmbit' \
+    _, err = self.cc.run_command('tc class replace dev %s parent 1: classid 1:10 htb rate %dmbit ceil %dmbit' \
                                % (self.iface_ext, bw_mbps, bw_mbps))
     if err:
       raise Exception('Could not change htb class rate: ' + err)
