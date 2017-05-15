@@ -153,6 +153,7 @@ class NodeInfo(object):
     # stats
     self.hp_cpu_percent = 0
     self.be_cpu_percent = 0
+    self.be_quota = 0
 
 
 def ExtractWClass(item):
