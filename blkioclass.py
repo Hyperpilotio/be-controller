@@ -24,9 +24,10 @@ class BlkioClass(object):
         https://fritshoogland.wordpress.com/2012/12/15/throttling-io-with-linux/
 
   """
-  def __init__(self, block_dev, max_iops, ctlloc):
+  def __init__(self, block_dev, max_rd_iops, max_wr_iops):
     self.block_dev = block_dev
-    self.max_iops = max_iops
+    self.max_rd_iops = max_rd_iops
+    self.max_wr_iops = max_wr_iops
     self.keys = set()
 
     # check if blockio is active
@@ -55,19 +56,21 @@ class BlkioClass(object):
       self.keys.remove(cont_key)
 
 
-  def setIopsLimit(self, iops):
+  def setIopsLimit(self, riops, wiops):
     """ Sets rad/write IOPS limit for BE containers
-        Symmetric rd/write limit
     """
     if len(self.keys) == 0:
       return
 
-    if iops >= self.max_iops:
-      raise Exception('Blkio limit ' + iops + ' is higher than max iops ' + self.max_iops)
+    if riops > self.max_rd_iops:
+      raise Exception('Blkio rd limit ' + riops + ' is higher than max iops ' + self.max_rd_iops)
+    if wiops > self.max_wr_iops:
+      raise Exception('Blkio wr limit ' + riops + ' is higher than max iops ' + self.max_wr_iops)
 
     # heuristic: assuming N BE containers, allow each to BE job to use up to 1/N IOPS
     # a hierarchical cgroup would be better
-    limit = (int)(iops/len(self.keys))
+    rlimit = (int)(riops/len(self.keys))
+    wlimit = (int)(wiops/len(self.keys))
 
     # set the limit for every container
     for cont in self.keys:
@@ -80,26 +83,24 @@ class BlkioClass(object):
         print 'WARNING Blkio not setup correctly for container (limit): '+ cont
         continue
       # throttle string
-      cmd = self.block_dev + ' ' + str(limit)
+      rcmd = self.block_dev + ' ' + str(rlimit)
+      wcmd = self.block_dev + ' ' + str(wlimit)
       # read limit
       try:
         with open(rfile, "w") as _:
-          _.write(cmd)
+          _.write(rcmd)
         with open(wfile, "w") as _:
-          _.write(cmd)
+          _.write(wcmd)
       except EnvironmentError as e:
-        print 'WARNING Blkio not setup correctly for container (limit): '+ cont
-        print cmd
-        print wfile
-        print rfile
-        print e
+        print 'WARNING Blkio not setup correctly for container (limit): '+ e
         continue
 
 
   def getIopUsed(self, cont_key):
     """ Find IOPS used for an active container
     """
-    pattern = self.block_dev + ' Total'
+    rpattern = self.block_dev + ' Read'
+    wpattern = self.block_dev + ' Write'
 
     # check if directory and stats file exists
     directory = '/sys/fs/cgroup/blkio/' + cont_key
@@ -113,10 +114,14 @@ class BlkioClass(object):
     # read and parse iops
     with open(stats_file) as _:
       lines = _.readlines()
+    riop = 0
+    wiop = 0
     for _ in lines:
-      if _.startswith(pattern):
-        iops = int(_.split()[2])
+      if _.startswith(rpattern):
+        riop = int(_.split()[2])
+      if _.startswith(wpattern):
+        wiop = int(_.split()[2])
+      if riop and wiop:
         break
-      iops = 0
 
-    return iops
+    return riop, wiop

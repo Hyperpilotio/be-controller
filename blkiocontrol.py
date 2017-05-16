@@ -27,9 +27,8 @@ def BlkioControll():
   netst = st.params['blkio_controller']
   if st.verbose:
     print "Starting BlkioControl (%s, %d, %s)" \
-           % (netst['block_dev'], netst['max_iops'], netst['ctlloc'])
-  blkio = blkioclass.BlkioClass(netst['block_dev'], netst['max_iops'], \
-                          st.params['ctlloc'])
+           % (netst['block_dev'], netst['max_rd_iops'], netst['max_wr_iops'])
+  blkio = blkioclass.BlkioClass(netst['block_dev'], netst['max_rd_iops'], netst['max_wr_iops'])
   period = netst['blkio_period']
   cycle = 0
   start_iop_stats = {}
@@ -66,26 +65,35 @@ def BlkioControll():
 
     # get IOPS usage statistics
     end_iop_stats = {}
-    be_iop = 0
-    hp_iop = 0
+    be_riop = 0
+    be_wiop = 0
+    hp_riop = 0
+    hp_wiop = 0
     for key in active_ids:
-      end = blkio.getIopUsed(key)
-      end_iop_stats[key] = end
+      rend, wend = blkio.getIopUsed(key)
+      end_iop_stats[key] = [rend, wend]
       if key in start_iop_stats:
-        start = start_iop_stats[key]
+        [rstart, wstart] = start_iop_stats[key]
       else:
-        start = 0
-      iop = end - start
+        rstart = 0
+        wstart = 0
+      riop = rend - rstart
+      wiop = wend - wstart
       if key in active_be_ids:
-        be_iop += iop
+        be_riop += riop
+        be_wiop += wiop
       else:
-        hp_iop += iop
+        hp_riop += riop
+        hp_wiop += wiop
 
     end_time = dt.datetime.now()
     elapsed_time = (end_time - start_time).total_seconds()
-    hp_iops = int(hp_iop/elapsed_time)
-    be_iops = int(be_iop/elapsed_time)
-    total_iops = hp_iops + be_iops
+    hp_riops = int(hp_riop/elapsed_time)
+    be_riops = int(be_riop/elapsed_time)
+    hp_wiops = int(hp_wiop/elapsed_time)
+    be_wiops = int(be_wiop/elapsed_time)
+    total_riops = hp_riops + be_riops
+    total_wiops = hp_wiops + be_wiops
 
     # reset stats for next cycle
     start_time = end_time
@@ -100,18 +108,26 @@ def BlkioControll():
       blkio.removeBeCont(_)
 
     # actual controller
-    be_limit = blkio.max_iops - hp_iops - max(0.05*blkio.max_iops, 0.10*hp_iops)
-    if be_limit < 0.0:
-      be_limit = 0.0
-    blkio.setIopsLimit(be_limit)
+    be_rlimit = blkio.max_rd_iops - hp_riops - max(0.05*blkio.max_rd_iops, 0.10*hp_riops)
+    be_wlimit = blkio.max_wr_iops - hp_wiops - max(0.05*blkio.max_wr_iops, 0.10*hp_wiops)
+    if be_rlimit < 0.0:
+      be_rlimit = 0.0
+    if be_wlimit < 0.0:
+      be_wlimit = 0.0
+    blkio.setIopsLimit(be_rlimit, be_wlimit)
 
     blkio_cycle_data = {
         "cycle": cycle,
-        "max_iops": blkio.max_iops,
-        "total_iops": total_iops,
-        "hp_iops": hp_iops,
-        "be_iops": be_iops,
-        "be_limit": be_limit
+        "max_rd_iops": blkio.max_rd_iops,
+        "max_wr_iops": blkio.max_wr_iops,
+        "total_riops": total_riops,
+        "total_wiops": total_wiops,
+        "hp_rd_iops": hp_riops,
+        "hp_wr_iops": hp_wiops,
+        "be_rd_iops": be_riops,
+        "be_wr_iops": be_wiops,
+        "be_rd_limit": be_rlimit,
+        "be_wr_limit": be_wlimit
     }
 
     at = dt.datetime.now().strftime('%H:%M:%S')
@@ -119,7 +135,8 @@ def BlkioControll():
     # loop
     if st.verbose:
       print "Blkio controller cycle", cycle, "at", at,
-      print " IOPS: %d (Total used) %d (HP used), %d (BE alloc)" %(total_iops, hp_iops, be_iops)
+      print " IOPS: %d (Total used) %d (HP used), %d (BE alloc)" \
+            %(total_riops + total_wiops, hp_riops + hp_wiops, be_riops + be_wiops)
 
     if st.get_param('write_metrics', 'blkio_controller', False) is True:
       st.stats_writer.write(at, st.node.name, "blkio", blkio_cycle_data)

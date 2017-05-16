@@ -32,7 +32,8 @@
       "blkio_period": 2,
       "blkio_controller_disabled": false,
       "block_dev": "202:0",
-      "max_iops": 1500,
+      "max_wr_iops": 1000,
+      "max_rd_iops": 1500,
       "hp_iops": 1000
     }, 
     "write_metrics": false
