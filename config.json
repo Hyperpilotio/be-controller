@@ -34,7 +34,8 @@
       "block_dev": "202:0",
       "max_wr_iops": 1000,
       "max_rd_iops": 1500,
-      "hp_iops": 1000
+      "hp_iops": 1000,
+      "write_metrics": false
     }, 
     "write_metrics": false
 }
