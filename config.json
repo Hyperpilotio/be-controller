@@ -12,12 +12,10 @@
       "min_shares": 2,
       "max_be_quota": 0.4,
       "min_be_quota": 0.05,
-      "BE_growth_rate": 1.1,
-      "BE_shrink_rate": 0.8,
       "BE_growth_ratio": 0.1,
       "BE_shrink_ratio": 1.0,
       "disabled": false,
-      "write_metrics": false
+      "write_metrics": true
     },
     "net_controller": {
       "period": 2,
@@ -26,15 +24,16 @@
       "link_bw_mbps" : 10000,
       "max_bw_mbps" : 700,
       "disabled": false,
-      "write_metrics": false
+      "write_metrics": true
     },
     "blkio_controller": {
       "blkio_period": 2,
-      "blkio_controller_disabled": false,
       "block_dev": "202:0",
       "max_wr_iops": 1000,
       "max_rd_iops": 1500,
-      "hp_iops": 1000
+      "hp_iops": 1000,
+      "disabled": false,
+      "write_metrics": true
     }, 
-    "write_metrics": false
+    "write_metrics": true
 }

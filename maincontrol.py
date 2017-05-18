@@ -226,22 +226,19 @@ def GrowBE(slack):
           cont.quota = max_be_quota
         try:
           cont.docker.update(cpu_quota=cont.quota)
-          print "Grow CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
+          print "Grow CPU quota of BE container in pod %s from %d to %d" % (pod.name, old_quota, cont.quota)
         except docker.errors.APIError as e:
           print "Cannot update quota for container %s: %s" % (str(cont), e)
         aggregate_be_quota += cont.quota
+
   st.node.be_quota = aggregate_be_quota
 
 
 def ShrinkBE(slack):
   """ shrinks quota for all BE workloads by be_shrink_rate
   """
-
-  if slack == 0:
-      be_shrink_rate = st.params['quota_controller']['BE_shrink_rate']
-  else:
-      be_shrink_ratio = st.params['quota_controller']['BE_shrink_ratio']
-      be_shrink_rate = 1 + be_shrink_ratio * slack
+  be_shrink_ratio = st.params['quota_controller']['BE_shrink_ratio']
+  be_shrink_rate = 1 + be_shrink_ratio * slack
   min_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['min_be_quota'])
 
   aggregate_be_quota = 0
@@ -254,13 +251,12 @@ def ShrinkBE(slack):
           cont.quota = min_be_quota
         try:
           cont.docker.update(cpu_quota=cont.quota)
-          print "Shrink CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
+          print "Shrink CPU quota of BE container in pod %s from %d to %d" % (pod.name, old_quota, cont.quota)
         except docker.errors.APIError as e:
           print "Cannot update quota for container %s: %s" % (str(cont), e)
         aggregate_be_quota += cont.quota
 
   st.node.be_quota = aggregate_be_quota
-
 
 
 def ParseArgs():
@@ -349,6 +345,7 @@ def __init__():
 
   # parse arguments
   st.params = ParseArgs()
+  st.stats_writer = store.InfluxWriter()
 
   if st.get_param("write_metrics", None, False) is True:
     # flatten the setting params
@@ -375,8 +372,6 @@ def __init__():
   slack_threshold_grow = st.params['quota_controller']['slack_threshold_grow']
   load_threshold_grow = st.params['quota_controller']['load_threshold_grow']
   period = st.params['quota_controller']['period']
-
-  st.stats_writer = store.InfluxWriter()
 
   # launch watcher for active containers and pods
   if st.verbose:
@@ -472,7 +467,7 @@ def __init__():
       quota_cycle_data["action"] = "shrink_be"
       if st.verbose:
         print " Action: Shrinking BE"
-      ShrinkBE(0)
+      ShrinkBE((load_threshold_shrink - cpu_usage)/100.0)
     # Enable best effort
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow and not st.active.be_pods:
