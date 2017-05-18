@@ -42,7 +42,7 @@ def BlkioControll():
       time.sleep(period)
       continue
 
-    if st.get_param('blkio_controller_disabled', False) is True:
+    if st.get_param('disabled', 'blkio_controller', False) is True:
       print "Blkio Controller is disabled"
       time.sleep(period)
       continue
