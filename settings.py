@@ -12,6 +12,7 @@ import threading
 import docker
 from kubernetes import watch
 import rwlock
+import store
 
 class Container(object):
   """ A class for tracking active containers
@@ -188,7 +189,7 @@ active = ActivePods()
 # node info
 node = NodeInfo()
 # stats writer
-stats_writer = None
+stats_writer = store.InfluxWriter()
 
 def K8SWatch():
   """ Maintains the list of active containers.
