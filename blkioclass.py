@@ -106,11 +106,11 @@ class BlkioClass(object):
     directory = '/sys/fs/cgroup/blkio/' + cont_key
     if not os.path.isdir(directory):
       print 'Blkio not configured for container %s' %(cont_key)
-      return 0
+      return 0, 0
     stats_file = directory + '/blkio.throttle.io_serviced'
     if not os.path.isfile(stats_file):
       print 'Blkio not configured for container %s' %(cont_key)
-      return 0
+      return 0, 0
     # read and parse iops
     with open(stats_file) as _:
       lines = _.readlines()
