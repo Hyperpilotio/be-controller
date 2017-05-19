@@ -26,7 +26,7 @@ def BlkioControll():
   # initialize controller
   netst = st.params['blkio_controller']
   if st.verbose:
-    print "Starting BlkioControl (%s, %d, %s)" \
+    print "Blkio: Starting BlkioControl (%s, %d, %s)" \
            % (netst['block_dev'], netst['max_rd_iops'], netst['max_wr_iops'])
   blkio = blkioclass.BlkioClass(netst['block_dev'], netst['max_rd_iops'], netst['max_wr_iops'])
   period = netst['blkio_period']
@@ -38,12 +38,12 @@ def BlkioControll():
   while 1:
 
     if not st.enabled:
-      print "BE Controller is disabled, skipping blkio control"
+      print "Blkio:WARNING: BE Controller is disabled, skipping blkio control"
       time.sleep(period)
       continue
 
     if st.get_param('disabled', 'blkio_controller', False) is True:
-      print "Blkio Controller is disabled"
+      print "Blkio:WARNING: Blkio Controller is disabled"
       time.sleep(period)
       continue
 
@@ -134,10 +134,10 @@ def BlkioControll():
 
     # loop
     if st.verbose:
-      print "Blkio controller cycle", cycle, "at", at,
-      print " IOPS Usage: %d (Total) %d (HP), %d (BE)" \
+      print "Blkio: Blkio controller cycle", cycle, "at", at,
+      print "Blkio:   IOPS Usage: %d (Total) %d (HP), %d (BE)" \
             %(total_riops + total_wiops, hp_riops + hp_wiops, be_riops + be_wiops)
-      print " BE IOPS Limits: %d (read), %d (write)" \
+      print "Blkio:   BE IOPS Limits: %d (read), %d (write)" \
             %(be_rlimit, be_wlimit)
 
     if st.get_param('write_metrics', 'blkio_controller', False) is True:

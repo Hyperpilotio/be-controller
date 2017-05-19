@@ -57,7 +57,7 @@ def CpuStatsDocker():
         cont.cpu_percent = percent
         cpu_usage += percent
       except docker.errors.APIError:
-        print "Problem with docker container %s" % cont.docker_name
+        print "Main:WARNING: Problem with docker container %s" % cont.docker_name
   return cpu_usage
 
 
@@ -75,7 +75,7 @@ def CpuStatsK8S():
     cpu_usage = usage_nano_cores / (st.node.cpu * 1E9) * 100.0
     return cpu_usage
   except (ValueError, pycurl.error)  as e:
-    print "Problem calculating CpuStatsK8S ", e
+    print "Main:WARNING: Problem calculating CpuStatsK8S ", e
     return 100.0
 
 def CpuStats():
@@ -104,14 +104,14 @@ def ControllerEnabled():
     output = json.loads(data.getvalue())
     return output['data']
   except (ValueError, pycurl.error) as e:
-    print "Problem accessing QoS data store:", e
+    print "Main:WARNING:: Problem accessing QoS data store:", e
     return st.enabled
 
 
 def SloSlackQoSDS(name):
   """ Read SLO slack from QoS data store
   """
-  print "  Getting slack value for", name, "from QoS data store"
+  print "Main: Getting slack value for", name, "from QoS data store"
   try:
     _ = pycurl.Curl()
     data = BytesIO()
@@ -120,10 +120,10 @@ def SloSlackQoSDS(name):
     _.perform()
     output = json.loads(data.getvalue())
     if output['error']:
-      print "Problem accessing QoS data store: " + output['data']
+      print "Main:WARNING: Problem accessing QoS data store: " + output['data']
       return 0.0, 0.0
     if name not in output['data']:
-      print "QoS datastore does not track workload", name
+      print "Main:WARNING: QoS datastore does not track workload", name
       return 0.0, 0.0
     elif 'metrics' not in output['data'][name] or \
        'slack' not in output['data'][name]['metrics']:
@@ -134,7 +134,7 @@ def SloSlackQoSDS(name):
         metrics['latency'] = 0.0
       return float(metrics['slack']), float(metrics['latency'])
   except (ValueError, pycurl.error) as e:
-    print "Problem accessing QoS data store ", e
+    print "Main:WARNING: Problem accessing QoS data store ", e
     return 0.0, 0.0
 
 def SloSlack(name):
@@ -153,7 +153,7 @@ def EnableBE():
                                stderr=subprocess.PIPE)
     _, stderr = process.communicate()
     if process.returncode != 0:
-      print "Failed to enable BE on k8s: %s" % stderr
+      print "Main:ERROR: Failed to enable BE on k8s: %s" % stderr
 
 
 def DisableBE():
@@ -171,14 +171,14 @@ def DisableBE():
                   pod.namespace, body, grace_period_seconds=0, \
                   orphan_dependents=True)
         except ApiException as e:
-          print "Cannot kill K8S BE pod: %s\n" % e
+          print "Main:WARNING: Cannot kill K8S BE pod: %s\n" % e
       else:
       # docker kill container
         try:
           for _, cont in pod.containers.items():
             cont.docker.kill()
         except docker.errors.APIError:
-          print "Cannot kill container %s" % cont.name
+          print "Main:WARNING: Cannot kill container %s" % cont.name
 
   # taint local node
   if st.k8sOn:
@@ -187,7 +187,7 @@ def DisableBE():
                                  stderr=subprocess.PIPE)
     _, stderr = process.communicate()
     if process.returncode != 0:
-      print "Failed to disable BE on k8s: %s" % stderr
+      print "Main:ERROR: Failed to disable BE on k8s: %s" % stderr
 
 
 def ResetBE():
@@ -202,9 +202,9 @@ def ResetBE():
         cont.quota = min_be_quota
         try:
           cont.docker.update(cpu_quota=cont.quota)
-          print "Reset CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
+          print "Main: Reset CPU quota of BE container from %d to %d" % (old_quota, cont.quota)
         except docker.errors.APIError as e:
-          print "Cannot update quota for container %s: %s" % (str(cont), e)
+          print "Main:WARNING: Cannot update quota for container %s: %s" % (str(cont), e)
 
 
 def GrowBE(slack):
@@ -226,9 +226,9 @@ def GrowBE(slack):
           cont.quota = max_be_quota
         try:
           cont.docker.update(cpu_quota=cont.quota)
-          print "Grow CPU quota of BE container in pod %s from %d to %d" % (pod.name, old_quota, cont.quota)
+          print "Main: Grow CPU quota of BE container in pod %s from %d to %d" % (pod.name, old_quota, cont.quota)
         except docker.errors.APIError as e:
-          print "Cannot update quota for container %s: %s" % (str(cont), e)
+          print "Main:WARNING: Cannot update quota for container %s: %s" % (str(cont), e)
         aggregate_be_quota += cont.quota
 
   st.node.be_quota = aggregate_be_quota
@@ -251,9 +251,9 @@ def ShrinkBE(slack):
           cont.quota = min_be_quota
         try:
           cont.docker.update(cpu_quota=cont.quota)
-          print "Shrink CPU quota of BE container in pod %s from %d to %d" % (pod.name, old_quota, cont.quota)
+          print "Main: Shrink CPU quota of BE container in pod %s from %d to %d" % (pod.name, old_quota, cont.quota)
         except docker.errors.APIError as e:
-          print "Cannot update quota for container %s: %s" % (str(cont), e)
+          print "Main:WARNING: Cannot update quota for container %s: %s" % (str(cont), e)
         aggregate_be_quota += cont.quota
 
   st.node.be_quota = aggregate_be_quota
@@ -277,10 +277,10 @@ def ParseArgs():
       try:
         params = json.load(json_data_file)
       except ValueError as e:
-        print "Error in reading configuration file %s: %s" % (args.config, e)
+        print "Main:ERROR: Error in reading configuration file %s: %s" % (args.config, e)
         sys.exit(-1)
   else:
-    print "Cannot read configuration file ", args.config
+    print "Main:ERROR: Cannot read configuration file ", args.config
     sys.exit(-1)
 
   # frequently used parameters
@@ -306,9 +306,9 @@ def configDocker():
   # always initialize docker
   try:
     st.node.denv = docker.from_env()
-    print "Docker API initialized."
+    print "Main: Docker API initialized."
   except docker.errors.APIError:
-    print "Cannot communicate with docker daemon, terminating."
+    print "Main:ERROR: Cannot communicate with docker daemon, terminating."
     sys.exit(-1)
 
 
@@ -322,19 +322,19 @@ def configK8S():
       else:
         config.load_kube_config()
       st.node.kenv = client.CoreV1Api()
-      print "K8S API initialized."
+      print "Main: K8S API initialized."
     except config.ConfigException as e:
-      print "Cannot initialize K8S environment, terminating:", e
+      print "Main:ERROR: Cannot initialize K8S environment, terminating:", e
       sys.exit(-1)
     st.node.name = os.getenv('MY_NODE_NAME')
     if st.node.name is None:
-      print "Cannot get node name in K8S, terminating."
+      print "Main:ERROR: Cannot get node name in K8S, terminating."
       sys.exit(-1)
     # read node stats
     try:
       _ = st.node.kenv.read_node(st.node.name)
     except ApiException as e:
-      print "Exception when calling CoreV1Api->read_node: %s\n" % e
+      print "Main:ERROR: Exception when calling CoreV1Api->read_node: %s\n" % e
       sys.exit(-1)
     st.node.cpu = int(_.status.capacity['cpu'])
 
@@ -351,11 +351,11 @@ def __init__():
     # flatten the setting params
     stored_params = {}
     for key, val in st.params.items():
-        if isinstance(val, dict):
-            for ctrl_param, param_val in val.items():
-                stored_params["{}.{}".format(key, ctrl_param)] = param_val
-        else:
-            stored_params[key] = val
+      if isinstance(val, dict):
+        for ctrl_param, param_val in val.items():
+          stored_params["{}.{}".format(key, ctrl_param)] = param_val
+      else:
+        stored_params[key] = val
     st.stats_writer.write(dt.now(), os.getenv("MY_NODE_NAME"),
                           "settings", stored_params)
 
@@ -375,31 +375,31 @@ def __init__():
 
   # launch watcher for active containers and pods
   if st.verbose:
-    print "Starting K8S watcher"
+    print "Main: Starting K8S watcher"
   try:
     _ = threading.Thread(name='K8SWatch', target=st.K8SWatch)
     _.setDaemon(True)
     _.start()
   except threading.ThreadError:
-    print "Cannot start K8S watcher; terminating"
+    print "Main:ERROR: Cannot start K8S watcher; terminating"
     sys.exit(-1)
   # launch other controllers
   if st.verbose:
-    print "Starting network controller"
+    print "Main: Starting network controller"
   try:
     _ = threading.Thread(name='NetControll', target=net.NetControll)
     _.setDaemon(True)
     _.start()
   except threading.ThreadError:
-    print "Cannot start network controller; continuing without it"
+    print "Main:WARNING: Cannot start network controller; continuing without it"
   if st.verbose:
-    print "Starting blkio controller"
+    print "Main: Starting blkio controller"
   try:
     _ = threading.Thread(name='BlkioControll', target=blkio.BlkioControll)
     _.setDaemon(True)
     _.start()
   except threading.ThreadError:
-    print "Cannot start blkio controller; continuing without it"
+    print "Main:WARNING: Cannot start blkio controller; continuing without it"
 
 
   # control loop
@@ -408,12 +408,12 @@ def __init__():
     st.enabled = ControllerEnabled()
 
     if not st.enabled:
-      print "BE Controller is disabled, skipping main control"
+      print "Main:WARNING: BE Controller is disabled, skipping main control"
       time.sleep(period)
       continue
 
     if st.get_param('disabled', 'quota_controller', False) is True:
-      print "CPU controller is disabled"
+      print "Main:WARNING: CPU controller is disabled"
       time.sleep(period)
       continue
 
@@ -437,56 +437,56 @@ def __init__():
     }
 
     if st.verbose:
-      print "Quota controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
-      print " Current state:"
-      print "  Qos app", st.node.qos_app, " SLO slack", slo_slack, " CPU utilization", cpu_usage
-      print "  HP (%d)" % (st.active.hp_pods)
-      print "  BE (%d): %d quota" % (st.active.be_pods, st.node.be_quota)
+      print "Main: Quota controller cycle", cycle, "at", dt.now().strftime('%H:%M:%S')
+      print "Main: Current state:"
+      print "Main:   Qos app", st.node.qos_app, " SLO slack", slo_slack, " CPU utilization", cpu_usage
+      print "Main:   HP (%d)" % (st.active.hp_pods)
+      print "Main:   BE (%d): %d quota" % (st.active.be_pods, st.node.be_quota)
 
     # grow, shrink or disable control
     # Disable
     if slo_slack < slack_threshold_disable and st.active.be_pods:
       quota_cycle_data["action"] = "disable_be"
       if st.verbose:
-        print " Action: Disabling BE"
+        print "Main:Action: Disabling BE"
       DisableBE()
     # Reset to minimum
     elif slo_slack < slack_threshold_reset and st.active.be_pods:
       quota_cycle_data["action"] = "reset_be"
       if st.verbose:
-        print " Action: Resetting BE"
+        print "Main:Action: Resetting BE"
       ResetBE()
     # Shrink quota due to slack
     elif slo_slack < slack_threshold_shrink and st.active.be_pods:
       quota_cycle_data["action"] = "shrink_be"
       if st.verbose:
-        print " Action: Shrinking BE"
+        print "Main:Action: Shrinking BE"
       ShrinkBE(slo_slack-slack_threshold_shrink)
     # Shrink quota due to high utilization
     elif cpu_usage > load_threshold_shrink and st.active.be_pods:
       quota_cycle_data["action"] = "shrink_be"
       if st.verbose:
-        print " Action: Shrinking BE"
+        print "Main:Action: Shrinking BE"
       ShrinkBE((load_threshold_shrink - cpu_usage)/100.0)
     # Enable best effort
     elif slo_slack > slack_threshold_grow and \
          cpu_usage < load_threshold_grow and not st.active.be_pods:
       quota_cycle_data["action"] = "enable_be"
       if st.verbose:
-        print " Action: Enabling BE"
+        print "Main:Action: Enabling BE"
       EnableBE()
     # Grow best effort
     elif slo_slack > slack_threshold_grow and \
       cpu_usage < load_threshold_grow and st.active.be_pods:
       quota_cycle_data["action"] = "grow_be"
       if st.verbose:
-        print " Action: Growing BE"
+        print "Main:Action: Growing BE"
       GrowBE(slo_slack)
     # Default
     else:
       quota_cycle_data["action"] = "none"
       if st.verbose:
-        print " Action: No change"
+        print "Main:Action: No change"
 
     if st.get_param('write_metrics', 'quota_controller', False) is True:
       st.stats_writer.write(at, st.node.name, "cpu_quota", quota_cycle_data)

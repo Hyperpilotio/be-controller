@@ -8,7 +8,6 @@ __email__ = "christos@hyperpilot.io"
 __copyright__ = "Copyright 2017, HyperPilot Inc"
 
 import sys
-import threading
 import docker
 from kubernetes import watch
 import rwlock
@@ -75,7 +74,7 @@ class ActivePods(object):
     """ Track new pod
     """
     if key in self.pods:
-      print "K8SWatch WARNING: Duplicate pod %s" %(key)
+      print "K8SWatch:WARNING: Duplicate pod %s" %(key)
     pod = Pod()
     pod.name = k8s_object.metadata.name
     pod.namespace = k8s_object.metadata.namespace
@@ -84,7 +83,7 @@ class ActivePods(object):
     pod.qosclass = k8s_object.status.qos_class.lower()
     pod.wclass = ExtractWClass(k8s_object)
     if pod.wclass == 'BE' and pod.qosclass != 'besteffort':
-      print "K8SWatch WARNING: Pod %s is not BestEffort in K8S" %(key)
+      print "K8SWatch:WARNING: Pod %s is not BestEffort in K8S" %(key)
     if pod.wclass == 'BE':
       self.be_pods += 1
     else:
@@ -93,7 +92,7 @@ class ActivePods(object):
     self.pods[key] = pod
     self.lock.release_write()
     if verbose:
-      print "K8SWatch ADDED pod %s (%s, %s)" %(key, pod.qosclass, pod.wclass)
+      print "K8SWatch: ADDED pod %s (%s, %s)" %(key, pod.qosclass, pod.wclass)
 
   def modify_pod(self, k8s_object, key, min_quota, max_quota):
     """ Modify tracked pod
@@ -116,7 +115,7 @@ class ActivePods(object):
       try:
         c.docker = node.denv.containers.get(_)
       except (docker.errors.NotFound, docker.errors.APIError):
-        print "K8SWatch WARNING: Cannot find containers %s for pod %s" %(_, key)
+        print "K8SWatch:WARNING: Cannot find containers %s for pod %s" %(_, key)
         continue
       c.docker_name = c.docker.name
       c.quota = c.docker.attrs['HostConfig']['CpuQuota']
@@ -138,7 +137,7 @@ class ActivePods(object):
       pod.container_ids.remove(_)
     self.lock.release_write()
     if verbose:
-      print "K8SWatch UPDATED pod %s (%s, %s)" %(key, pod.qosclass, pod.wclass)
+      print "K8SWatch:UPDATED pod %s (%s, %s)" %(key, pod.qosclass, pod.wclass)
 
 
 class NodeInfo(object):
@@ -217,10 +216,10 @@ def K8SWatch():
         if add_event or modify_event:
           node.qos_app = k8s_object.status.container_statuses[0].name
           if verbose:
-            print "K8SWatch Found QoS workload %s" %node.qos_app
+            print "K8SWatch: Found QoS workload %s" %node.qos_app
         elif delete_event:
           if verbose:
-            print "K8SWatch Deleting QoS workload %s" %pod_key
+            print "K8SWatch: Deleting QoS workload %s" %pod_key
           node.qos_app = ''
     except (KeyError, NameError):
       pass
@@ -229,7 +228,7 @@ def K8SWatch():
     if not k8s_object.spec.node_name == node.name:
       continue
     if verbose:
-      print "K8SWatch Watcher (%d): %s %s" % (len(active.pods), event['type'], pod_key)
+      print "K8SWatch: Watcher (%d): %s %s" % (len(active.pods), event['type'], pod_key)
 
     # type of event and processing needed
     tracked_pod = (pod_key in active.pods)
@@ -254,5 +253,5 @@ def K8SWatch():
 
 
   #not watching K8S anymore
-  print "K8SWatch ERROR: cannot watch K8S pods stream anynore, terminating"
+  print "K8SWatch:ERROR: cannot watch K8S pods stream anynore, terminating"
   sys.exit(-1)

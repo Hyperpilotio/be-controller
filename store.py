@@ -21,4 +21,4 @@ class InfluxWriter(object):
                 "fields": data,
             }])
         except InfluxDBClientError as e:
-            print("Error writing to influx: " + str(e))
+            print("Store:ERROR: Error writing to influx: " + str(e))

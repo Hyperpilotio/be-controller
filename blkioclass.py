@@ -43,7 +43,7 @@ class BlkioClass(object):
     # check if blockio is active
     directory = '/sys/fs/cgroup/blkio/' + cont_key
     if not os.path.isdir(directory):
-      print 'WARNING Blkio not setup correctly for container (add): '+ cont_key
+      print 'Blkio:WARNING: Blkio not setup correctly for container (add): '+ cont_key
     self.keys.add(cont_key)
 
 
@@ -51,7 +51,7 @@ class BlkioClass(object):
     """ Removes the long ID of a container from the list of BE containers throttled
     """
     if cont_key not in self.keys:
-      print 'WARNING Cannot remove from blkio non existing container %s' % cont_key
+      print 'Blkio:WARNING: Cannot remove from blkio non existing container %s' % cont_key
     else:
       self.keys.remove(cont_key)
 
@@ -80,7 +80,7 @@ class BlkioClass(object):
       if not os.path.isdir(directory) or \
          not os.path.isfile(rfile) or \
          not os.path.isfile(wfile):
-        print 'WARNING Blkio not setup correctly for container (limit): '+ cont
+        print 'Blkio:WARNING: Blkio not setup correctly for container (limit): '+ cont
         continue
       # throttle string
       rcmd = self.block_dev + ' ' + str(rlimit)
@@ -92,7 +92,7 @@ class BlkioClass(object):
         with open(wfile, "w") as _:
           _.write(wcmd)
       except EnvironmentError as e:
-        print 'WARNING Blkio not setup correctly for container (limit): '+ e
+        print 'Blkio:WARNING: cannot not setup correctly for container (limit): '+ e
         continue
 
 
@@ -105,11 +105,11 @@ class BlkioClass(object):
     # check if directory and stats file exists
     directory = '/sys/fs/cgroup/blkio/' + cont_key
     if not os.path.isdir(directory):
-      print 'Blkio not configured for container %s' %(cont_key)
+      print 'Blkio:WARNING: Blkio not configured for container %s' %(cont_key)
       return 0, 0
     stats_file = directory + '/blkio.throttle.io_serviced'
     if not os.path.isfile(stats_file):
-      print 'Blkio not configured for container %s' %(cont_key)
+      print 'Blkio:WARNING: Blkio not configured for container %s' %(cont_key)
       return 0, 0
     # read and parse iops
     with open(stats_file) as _:
