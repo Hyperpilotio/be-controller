@@ -33,9 +33,14 @@ def BlkioControll():
   cycle = 0
   start_iop_stats = {}
   start_time = dt.datetime.now()
+  was_enabled = False
 
   # control loop
   while 1:
+
+    # reset limits if the controller is turned off
+    if was_enabled and not st.enabled:
+      blkio.clearIopsLimit()
 
     if not st.enabled:
       print "Blkio:WARNING: BE Controller is disabled, skipping blkio control"
@@ -46,6 +51,8 @@ def BlkioControll():
       print "Blkio:WARNING: Blkio Controller is disabled"
       time.sleep(period)
       continue
+
+    was_enabled = True
 
     #Get IDS of all active containers
     active_ids = set()

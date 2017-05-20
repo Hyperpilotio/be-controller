@@ -189,6 +189,21 @@ def DisableBE():
     if process.returncode != 0:
       print "Main:ERROR: Failed to disable BE on k8s: %s" % stderr
 
+def MaxQuotaBE():
+  """ allows all BE workloads to run at max quota
+  """
+  max_be_quota = int(st.node.cpu * 100000 * st.params["quota_controller"]['max_be_quota'])
+
+  for _, pod in st.active.pods.items():
+    for _, cont in pod.containers.items():
+      if pod.wclass == 'BE':
+        cont.quota = max_be_quota
+        try:
+          cont.docker.update(cpu_quota=cont.quota)
+          print "Main: CPU quota of BE container set to max %d" % (cont.quota)
+        except docker.errors.APIError as e:
+          print "Main:WARNING: Cannot update quota for container %s: %s" % (str(cont), e)
+
 
 def ResetBE():
   """ resets quota for all BE workloads to min_be_quota
@@ -214,16 +229,22 @@ def GrowBE(slack):
   be_growth_ratio = st.params['quota_controller']['BE_growth_ratio']
   be_growth_rate = 1 + be_growth_ratio * slack
   max_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['max_be_quota'])
+  min_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['min_be_quota'])
 
   aggregate_be_quota = 0
   for _, pod in st.active.pods.items():
     for _, cont in pod.containers.items():
       if pod.wclass == 'BE':
+        if not c.period == 100000:
+          c.period = 100000
+          c.docker.update(cpu_period=100000)
         old_quota = cont.quota
         cont.quota = int(be_growth_rate * cont.quota)
         # We limit each BE container to a max quota
         if cont.quota > max_be_quota:
           cont.quota = max_be_quota
+        if cont.quota < min_be_quota:
+          cont.quota = min_be_quota
         try:
           cont.docker.update(cpu_quota=cont.quota)
           print "Main: Grow CPU quota of BE container in pod %s from %d to %d" % (pod.name, old_quota, cont.quota)
@@ -240,15 +261,21 @@ def ShrinkBE(slack):
   be_shrink_ratio = st.params['quota_controller']['BE_shrink_ratio']
   be_shrink_rate = 1 + be_shrink_ratio * slack
   min_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['min_be_quota'])
+  max_be_quota = int(st.node.cpu * 100000 * st.params['quota_controller']['max_be_quota'])
 
   aggregate_be_quota = 0
   for _, pod in st.active.pods.items():
     for _, cont in pod.containers.items():
       if pod.wclass == 'BE':
+        if not c.period == 100000:
+          c.period = 100000
+          c.docker.update(cpu_period=100000)
         old_quota = cont.quota
         cont.quota = int(be_shrink_rate * cont.quota)
         if cont.quota < min_be_quota:
           cont.quota = min_be_quota
+        if cont.quota > max_be_quota:
+          cont.quota = max_be_quota
         try:
           cont.docker.update(cpu_quota=cont.quota)
           print "Main: Shrink CPU quota of BE container in pod %s from %d to %d" % (pod.name, old_quota, cont.quota)
@@ -405,7 +432,12 @@ def __init__():
   # control loop
   cycle = 0
   while 1:
+
+    # reset limits if the controller is turned off
+    old_enabled = st.enabled
     st.enabled = ControllerEnabled()
+    if old_enabled and not st.enabled:
+      MaxQuotaBE()
 
     if not st.enabled:
       print "Main:WARNING: BE Controller is disabled, skipping main control"

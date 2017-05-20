@@ -125,3 +125,27 @@ class BlkioClass(object):
         break
 
     return riop, wiop
+
+  def clearIopsLimit(self):
+    """ Clears rad/write IOPS limit for BE containers
+    """
+    # set the limit for every container
+    for cont in self.keys:
+      directory = '/sys/fs/cgroup/blkio/' + cont
+      rfile = directory + '/blkio.throttle.read_iops_device'
+      wfile = directory + '/blkio.throttle.write_iops_device'
+      if not os.path.isdir(directory) or \
+         not os.path.isfile(rfile) or \
+         not os.path.isfile(wfile):
+        print 'Blkio:WARNING: Blkio not setup correctly for container (limit): '+ cont
+        continue
+      # throttle string
+      cmd = ''
+      try:
+        with open(rfile, "w") as _:
+          _.write(cmd)
+        with open(wfile, "w") as _:
+          _.write(cmd)
+      except EnvironmentError as e:
+        print 'Blkio:WARNING: cannot not clear correctly for container (limit): '+ e
+        continue

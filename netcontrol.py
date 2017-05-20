@@ -33,20 +33,31 @@ def NetControll():
                           st.params['ctlloc'])
   period = netst['period']
   cycle = 0
-
+  was_enabled = False
+  
   # control loop
   while 1:
 
+    # reset limits if the controller is turned off
+    if was_enabled and not st.enabled:
+      for _, pod in st.active.pods.items():
+        if pod.wclass == 'BE':
+          net.removeIPfromFilter(pod.ipaddress)
+
     if not st.enabled:
       print "Net:WARNING: BE Controller is disabled, skipping net control"
+      was_enabled = False
       time.sleep(period)
       continue
 
     if st.get_param('disabled', 'net_controller', False) is True:
       print "Net:WARNING: Net Controller is disabled"
+      was_enabled = False
       time.sleep(period)
       continue
 
+    was_enabled = True
+    
     # get IP of all active BE containers
     active_be_ips = set()
     st.active.lock.acquire_read()

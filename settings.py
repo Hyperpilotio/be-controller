@@ -94,7 +94,7 @@ class ActivePods(object):
     if verbose:
       print "K8SWatch: ADDED pod %s (%s, %s)" %(key, pod.qosclass, pod.wclass)
 
-  def modify_pod(self, k8s_object, key, min_quota, max_quota):
+  def modify_pod(self, k8s_object, key):
     """ Modify tracked pod
     """
     pod = self.pods[key]
@@ -120,12 +120,6 @@ class ActivePods(object):
       c.docker_name = c.docker.name
       c.quota = c.docker.attrs['HostConfig']['CpuQuota']
       c.period = c.docker.attrs['HostConfig']['CpuPeriod']
-      if pod.wclass == 'BE' and not c.period == 100000:
-        c.period = 100000
-        c.docker.update(cpu_period=100000)
-      if pod.wclass == 'BE' and (c.quota < min_quota or c.quota > max_quota):
-        c.quota = min_quota
-        c.docker.update(cpu_quota=c.quota)
       self.lock.acquire_write()
       pod.container_ids.add(_)
       pod.containers[_] = c
@@ -172,6 +166,7 @@ def ExtractWClass(item):
 verbose = False
 k8sOn = True
 enabled = False
+reset_limits = False
 params = {}
 def get_param(name, section=None, default=None):
   keys = params
@@ -193,9 +188,6 @@ stats_writer = store.InfluxWriter()
 def K8SWatch():
   """ Maintains the list of active containers.
   """
-  min_quota = int(node.cpu * 100000 * params['quota_controller']['min_be_quota'])
-  max_quota = int(node.cpu * 100000 * params['quota_controller']['max_be_quota'])
-
   w = watch.Watch()
   selector = ''
   timeout = 100000
@@ -246,7 +238,7 @@ def K8SWatch():
       active.add_pod(k8s_object, pod_key)
     # modify pod
     if modify_pod:
-      active.modify_pod(k8s_object, pod_key, min_quota, max_quota)
+      active.modify_pod(k8s_object, pod_key)
     # remove a pod
     if delete_pod:
       active.delete_pod(pod_key)
