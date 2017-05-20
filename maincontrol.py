@@ -189,18 +189,17 @@ def DisableBE():
     if process.returncode != 0:
       print "Main:ERROR: Failed to disable BE on k8s: %s" % stderr
 
-def MaxQuotaBE():
+def SetQuotaBE(quota):
   """ allows all BE workloads to run at max quota
   """
-  max_be_quota = int(st.node.cpu * 100000 * st.params["quota_controller"]['max_be_quota'])
 
   for _, pod in st.active.pods.items():
     for _, cont in pod.containers.items():
       if pod.wclass == 'BE':
-        cont.quota = max_be_quota
+        cont.quota = quota
         try:
           cont.docker.update(cpu_quota=cont.quota)
-          print "Main: CPU quota of BE container set to max %d" % (cont.quota)
+          print "Main: CPU quota of BE container set to %d" % (cont.quota)
         except docker.errors.APIError as e:
           print "Main:WARNING: Cannot update quota for container %s: %s" % (str(cont), e)
 
@@ -428,16 +427,24 @@ def __init__():
   except threading.ThreadError:
     print "Main:WARNING: Cannot start blkio controller; continuing without it"
 
+  max_be_quota = int(st.node.cpu * 100000 * st.params["quota_controller"]['max_be_quota'])
+  min_be_quota = int(st.node.cpu * 100000 * st.params["quota_controller"]['min_be_quota'])
+
 
   # control loop
   cycle = 0
   while 1:
 
-    # reset limits if the controller is turned off
+    
     old_enabled = st.enabled
     st.enabled = ControllerEnabled()
+
+    # reset max quota  if the controller is turned off
     if old_enabled and not st.enabled:
-      MaxQuotaBE()
+      SetQuotaBE(max_be_quota)
+    # set min quota if the controller is tuned on
+    if st.enabled and not old_enabled:
+      SetQuotaBE(min_be_quota)
 
     if not st.enabled:
       print "Main:WARNING: BE Controller is disabled, skipping main control"

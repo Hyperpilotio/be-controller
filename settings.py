@@ -94,7 +94,7 @@ class ActivePods(object):
     if verbose:
       print "K8SWatch: ADDED pod %s (%s, %s)" %(key, pod.qosclass, pod.wclass)
 
-  def modify_pod(self, k8s_object, key):
+  def modify_pod(self, k8s_object, key, min_quota):
     """ Modify tracked pod
     """
     pod = self.pods[key]
@@ -120,6 +120,14 @@ class ActivePods(object):
       c.docker_name = c.docker.name
       c.quota = c.docker.attrs['HostConfig']['CpuQuota']
       c.period = c.docker.attrs['HostConfig']['CpuPeriod']
+      # if the controller is enabled, set min quota for BE pods
+      if enabled and pod.wclass == 'BE':
+        if c.period != 100000:
+          c.period = 100000
+          c.docker.update(cpu_period=100000)
+        if c.quota != min_quota:
+          c.quota = min_quota
+          c.docker.update(cpu_quota=c.quota)
       self.lock.acquire_write()
       pod.container_ids.add(_)
       pod.containers[_] = c
@@ -191,6 +199,7 @@ def K8SWatch():
   w = watch.Watch()
   selector = ''
   timeout = 100000
+  min_quota = int(node.cpu * 100000 * params['min_be_quota'])
 
   # infinite loop listening to K8S pod events
   for event in w.stream(node.kenv.list_pod_for_all_namespaces,\
@@ -238,7 +247,7 @@ def K8SWatch():
       active.add_pod(k8s_object, pod_key)
     # modify pod
     if modify_pod:
-      active.modify_pod(k8s_object, pod_key)
+      active.modify_pod(k8s_object, pod_key, min_quota)
     # remove a pod
     if delete_pod:
       active.delete_pod(pod_key)
