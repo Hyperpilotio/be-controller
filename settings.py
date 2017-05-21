@@ -199,7 +199,7 @@ def K8SWatch():
   w = watch.Watch()
   selector = ''
   timeout = 100000
-  min_quota = int(node.cpu * 100000 * params['min_be_quota'])
+  min_quota = int(node.cpu * 100000 * params["quota_controller"]['min_be_quota'])
 
   # infinite loop listening to K8S pod events
   for event in w.stream(node.kenv.list_pod_for_all_namespaces,\
@@ -222,7 +222,7 @@ def K8SWatch():
           if verbose:
             print "K8SWatch: Deleting QoS workload %s" %pod_key
           node.qos_app = ''
-    except (KeyError, NameError):
+    except (KeyError, NameError, TypeError):
       pass
 
     # skip all events for pods for on different/unspecified nodes

@@ -234,9 +234,9 @@ def GrowBE(slack):
   for _, pod in st.active.pods.items():
     for _, cont in pod.containers.items():
       if pod.wclass == 'BE':
-        if not c.period == 100000:
-          c.period = 100000
-          c.docker.update(cpu_period=100000)
+        if not cont.period == 100000:
+          cont.period = 100000
+          cont.docker.update(cpu_period=100000)
         old_quota = cont.quota
         cont.quota = int(be_growth_rate * cont.quota)
         # We limit each BE container to a max quota
@@ -266,9 +266,9 @@ def ShrinkBE(slack):
   for _, pod in st.active.pods.items():
     for _, cont in pod.containers.items():
       if pod.wclass == 'BE':
-        if not c.period == 100000:
-          c.period = 100000
-          c.docker.update(cpu_period=100000)
+        if not cont.period == 100000:
+          pod.period = 100000
+          cont.docker.update(cpu_period=100000)
         old_quota = cont.quota
         cont.quota = int(be_shrink_rate * cont.quota)
         if cont.quota < min_be_quota:
@@ -398,6 +398,8 @@ def __init__():
   slack_threshold_grow = st.params['quota_controller']['slack_threshold_grow']
   load_threshold_grow = st.params['quota_controller']['load_threshold_grow']
   period = st.params['quota_controller']['period']
+  max_be_quota = int(st.node.cpu * 100000 * st.params["quota_controller"]['max_be_quota'])
+  min_be_quota = int(st.node.cpu * 100000 * st.params["quota_controller"]['min_be_quota'])
 
   # launch watcher for active containers and pods
   if st.verbose:
@@ -426,9 +428,6 @@ def __init__():
     _.start()
   except threading.ThreadError:
     print "Main:WARNING: Cannot start blkio controller; continuing without it"
-
-  max_be_quota = int(st.node.cpu * 100000 * st.params["quota_controller"]['max_be_quota'])
-  min_be_quota = int(st.node.cpu * 100000 * st.params["quota_controller"]['min_be_quota'])
 
 
   # control loop
