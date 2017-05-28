@@ -1,6 +1,13 @@
 {
-    "mode" : "k8s",
-    "ctlloc" : "in",
+    "mode": "k8s",
+    "ctlloc": "in",
+    "influx_db": {
+      "host": "influxsrv.hyperpilot",
+      "port": 8086,
+      "user": "root",
+      "password": "root",
+      "db": "be_controller"
+    },
     "quota_controller": {
       "period": 5,
       "slack_threshold_disable": -0.5,

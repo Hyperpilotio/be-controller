@@ -1,0 +1,27 @@
+
+---
+type: workflow
+name: workflow
+description: test-workflow
+
+fixtures:
+  - influxsrv:
+      template: influxsrv
+
+inputs:
+  parameters:
+    commit:
+      default: "%%session.commit%%"
+    repo:
+      default: "%%session.repo%%"
+
+steps:
+-
+  checkout:
+    template: checkout
+-
+  build:
+    template: test
+    parameters:
+      code: "%%steps.checkout.code%%"
+      influxHost: "%%fixtures.influxsrv.ip%%"

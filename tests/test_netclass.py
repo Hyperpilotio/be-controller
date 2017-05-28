@@ -1,7 +1,7 @@
 import unittest
 import netclass as nc
 
-class TestNetclassMethods(unittest.TestCase):
+class NetclassTestCase(unittest.TestCase):
     def test_parse_bw_stats(self):
         s = """
 class htb 1:10 root prio 0 rate 664Mbit ceil 664Mbit burst 1494b cburst 1494b
@@ -49,4 +49,4 @@ class htb 1:10 root prio 0 rate 662Mbit ceil 662Mbit burst 1489b cburst 1489b
         self.assertEqual(nc.NetClass.parseBwStats(s), {10: 123000000 / 1000000.0, 1: 2395000 / 1000000.0})
 
 if __name__ == '__main__':
-        unittest.main()
+    unittest.main()

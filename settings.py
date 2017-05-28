@@ -12,6 +12,7 @@ import docker
 from kubernetes import watch
 import rwlock
 import store
+import os
 
 class Container(object):
   """ A class for tracking active containers
@@ -80,7 +81,7 @@ class ActivePods(object):
     pod.namespace = k8s_object.metadata.namespace
     pod.uid = k8s_object.metadata.uid
     pod.ipaddress = k8s_object.status.pod_ip
-    pod.qosclass = k8s_object.status.qos_class.lower()
+    pod.qosclass = k8s_object.status.qos_class.lower() if k8s_object.status.qos_class != None else None
     pod.wclass = ExtractWClass(k8s_object)
     if pod.wclass == 'BE' and pod.qosclass != 'besteffort':
       print "K8SWatch:WARNING: Pod %s is not BestEffort in K8S" %(key)

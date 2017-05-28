@@ -1,0 +1,22 @@
+# policy.yaml
+---
+type: policy
+name: be-ctrl-workflow-policy
+description: Trigger workflow on pushes, pull requests and as a cron job
+template: workflow
+notifications:
+  -
+    when:
+      - on_success
+      - on_failure
+    whom:
+      - committer
+      - author
+when:
+  -
+    event: on_push
+    target_branches:
+      - "unit_test"
+labels:
+  milestone: unit_test
+  version: 1.0.1

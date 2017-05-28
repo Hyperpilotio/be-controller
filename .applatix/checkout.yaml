@@ -1,0 +1,24 @@
+# checkout.yaml
+---
+type: container
+name: checkout
+description: Checks out commit to /src and export it as an artifact
+
+inputs:
+  parameters:
+    commit:
+      default: "%%session.commit%%"
+    repo:
+      default: "%%session.repo%%"
+
+outputs:
+  artifacts:
+    code:
+      path: /src
+
+container:
+  image: get.applatix.io/applatix/axscm:v2.0
+  resources:
+    mem_mib: 256
+    cpu_cores: 0.1
+  command: axscm clone %%repo%% /src --commit %%commit%%

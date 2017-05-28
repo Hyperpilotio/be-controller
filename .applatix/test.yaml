@@ -1,0 +1,21 @@
+# test.yaml
+---
+type: container
+name: test
+description: Build-and-test-the-code
+
+inputs:
+  artifacts:
+  - from: "%%code%%"
+    path: /src
+  parameters:
+    code:
+    influxHost:
+
+container:
+  resources:
+    mem_mib: 256
+    cpu_cores: 1.0
+  image: python:2
+  command: sh -c 'cd /src && pip install -r requirements.txt && . ./run_tests.sh'
+  docker_options: -e "INFLUXDB_HOST=%%influxHost%%"

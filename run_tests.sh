@@ -1,1 +1,1 @@
-python -m unittest netclass_tests
+python -m unittest discover

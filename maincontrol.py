@@ -371,7 +371,10 @@ def __init__():
 
   # parse arguments
   st.params = ParseArgs()
-  st.stats_writer = store.InfluxWriter()
+  influx_conn = st.params['influx_db']
+  st.stats_writer = store.InfluxWriter(influx_conn['host'], influx_conn['port'], 
+                                        influx_conn['user'], influx_conn['password'], 
+                                        influx_conn['be_controller'])
 
   if st.get_param("write_metrics", None, False) is True:
     # flatten the setting params

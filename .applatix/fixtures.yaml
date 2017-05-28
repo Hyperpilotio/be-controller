@@ -1,0 +1,9 @@
+# fixtures.yaml
+# Test Environment
+---
+type: container
+name: influxsrv
+description: Influx DB instnce
+container:
+  image: hyperpilot/influx:1.2.2
+  docker_options: -e ADMIN_USER=root -e INFLUXDB_INIT_PWD=root
