@@ -18,6 +18,7 @@ class BlkioClassTestCase(unittest.TestCase):
 
         netst = st.params['blkio_controller']
         self.blkio = BlkioClass(netst['block_dev'], netst['max_rd_iops'], netst['max_wr_iops'])
+        st.enabled = True
 
     def tearDown(self):
         self.kubehelper.deleteDemoPods()
@@ -52,7 +53,7 @@ class BlkioClassTestCase(unittest.TestCase):
 
         # set iops limit over limit
         with self.assertRaises(Exception):
-            self.blkio.setIopsLimit(riops * 1.2, wiops * 1.2)
+            self.blkio.setIopsLimit(riops * 1.5, wiops * 1.5)
 
     def test_getIopUsed(self):
         self.blkio.getIopUsed(self.cont_key)
