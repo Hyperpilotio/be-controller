@@ -1,29 +1,46 @@
 import unittest
 from blkioclass import BlkioClass
+from blkiocontrol import GetBlkioPath
 import json
 import settings as st
 import os
 from kube_helper import KubeHelper
+import time
 
 class BlkioClassTestCase(unittest.TestCase):
 
     def setUp(self):
-        # create demo pod
-        self.kubehelper = KubeHelper()
-        self.demoPod = self.kubehelper.createDemoPod(BE=True)
-        self.cont_key = self.demoPod.status.container_statuses[0].container_id
         fileDir = os.path.dirname(os.path.realpath('__file__'))
         with open(os.path.join(fileDir, 'config.json'), 'r') as json_data_file:
             st.params = json.load(json_data_file)
-
         netst = st.params['blkio_controller']
+        print "set max read iops: {}, max write iops: {}".format(netst['max_rd_iops'], netst['max_wr_iops'])
         self.blkio = BlkioClass(netst['block_dev'], netst['max_rd_iops'], netst['max_wr_iops'])
+        st.enabled = True
+
+        # create demo pod
+        self.kubehelper = KubeHelper()
+        self.demoPod = self.kubehelper.createDemoPod(BE=True)
+        
+        # self.cont_key = "kubepods/besteffort/pod{podId}/{contId}".format(podId=self.demoPod.metadata.uid, contId=self.demoPod.status.container_statuses[0].container_id.strip("docker://"))
+        pod = st.Pod()
+        pod.name = self.demoPod.metadata.name
+        pod.namespace = self.demoPod.metadata.namespace
+        pod.uid = self.demoPod.metadata.namespace
+        pod.qosclass = self.demoPod.status.qos_class.lower() if self.demoPod.status.qos_class != None else None
+        self.cont_key = GetBlkioPath(netst['blkio_path'], pod, self.demoPod.status.container_statuses[0].container_id.strip("docker://"))
+
 
     def tearDown(self):
         self.kubehelper.deleteDemoPods()
 
-    def test_addBeCont(self):
+    def generateContKey(self, v1pod, container_id):
+        path_template = "kubepods/besteffort/pod{podId}/{contId}"
+        return path_template.format(podId=v1pod.metadata.uid, contId=container_id)
+
+    def test_blkio(self):
         # add be cont
+        
         self.blkio.addBeCont(self.cont_key)
         self.assertTrue(self.cont_key in self.blkio.keys, msg='container key not add to keys')
 
@@ -32,32 +49,31 @@ class BlkioClassTestCase(unittest.TestCase):
         with self.assertRaises(Exception):
             self.blkio.addBeCont(self.cont_key)
 
-        # remove be cont
-        self.blkio.removeBeCont(self.cont_key)
-        self.assertFalse(self.cont_key in self.blkio.keys, msg='container key still remain in keys')
-
-
-    def test_setIopsLimit(self):
+    # test_setIopsLimit(self):
+        print "test setIopsLimit"
         riops = st.params['blkio_controller']['max_rd_iops']
         wiops = st.params['blkio_controller']['max_wr_iops']
         
         # set iops limit under limit
         self.blkio.setIopsLimit(riops * 0.8, wiops * 0.8)
 
-        # how to verify?
         iops = self.blkio.getIopUsed(self.cont_key)
         self.assertLessEqual(iops[0], riops, msg='riops still greater then upper limit')
         self.assertLessEqual(iops[1], wiops, msg='wiops still greater then upper limit')
 
+        print "set iops limit over limit: riops: {}, wiops: {}".format(riops * 1.5, wiops * 1.5)
 
-        # set iops limit over limit
         with self.assertRaises(Exception):
-            self.blkio.setIopsLimit(riops * 1.2, wiops * 1.2)
+            self.blkio.setIopsLimit(riops * 1.5, wiops * 1.5)
 
-    def test_getIopUsed(self):
-        self.blkio.getIopUsed(self.cont_key)
-        # how to verify...?
-
-    def test_clearIopsLimit(self):
+        print "test clearIopsLimit"
         self.blkio.clearIopsLimit()
-        # how to verify...?
+        _ = self.blkio.getIopUsed(self.cont_key)
+        print "after clear iops limit: {}".format(_)
+        self.assertEqual(0, _[0], msg="riops not reset, got value: {}".format(_[0]))
+        self.assertEqual(0, _[1], msg="wiops not reset, got value: {}".format(_[1]))
+
+        # remove be cont
+        self.blkio.removeBeCont(self.cont_key)
+        self.assertFalse(self.cont_key in self.blkio.keys, msg='container key still remain in keys')
+

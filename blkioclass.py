@@ -31,7 +31,7 @@ class BlkioClass(object):
     self.keys = set()
 
     # check if blockio is active
-    if not os.path.isdir('/sys/fs/cgroup/blkio/kubepods'):
+    if not os.path.isdir('/sys/fs/cgroup/blkio'):
       raise Exception('Blkio not configured for K8S')
 
 
