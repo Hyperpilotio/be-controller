@@ -17,6 +17,7 @@ class BlkioClassTestCase(unittest.TestCase):
             st.params = json.load(json_data_file)
 
         netst = st.params['blkio_controller']
+        print "set max read iops: {}, max write iops: {}".format(netst['max_rd_iops'], netst['max_wr_iops'])
         self.blkio = BlkioClass(netst['block_dev'], netst['max_rd_iops'], netst['max_wr_iops'])
         st.enabled = True
 
@@ -49,12 +50,14 @@ class BlkioClassTestCase(unittest.TestCase):
         self.assertLessEqual(iops[0], riops, msg='riops still greater then upper limit')
         self.assertLessEqual(iops[1], wiops, msg='wiops still greater then upper limit')
 
-        # set iops limit over limit
+        print "set iops limit over limit: riops: {}, wiops: {}".format(riops * 1.5, wiops * 1.5)
+
         with self.assertRaises(Exception):
             self.blkio.setIopsLimit(riops * 1.5, wiops * 1.5)
 
-        # test clearIopsLimit
+        print "test clearIopsLimit"
         self.blkio.clearIopsLimit()
         _ = self.blkio.getIopUsed(self.cont_key)
+        print "after clear iops limit: {}".format(_)
         self.assertIsNone(_[0], msg="riops not reset, got value: {}".format(_[0]))
         self.assertIsNone(_[1], msg="wiops not reset, got value: {}".format(_[1]))
