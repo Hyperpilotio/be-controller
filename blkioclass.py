@@ -62,9 +62,9 @@ class BlkioClass(object):
     if len(self.keys) == 0:
       return
 
-    if riops > self.max_rd_iops:
+    if int(riops) > self.max_rd_iops:
       raise Exception('Blkio rd limit ' + riops + ' is higher than max iops ' + self.max_rd_iops)
-    if wiops > self.max_wr_iops:
+    if int(wiops) > self.max_wr_iops:
       raise Exception('Blkio wr limit ' + riops + ' is higher than max iops ' + self.max_wr_iops)
 
     # heuristic: assuming N BE containers, allow each to BE job to use up to 1/N IOPS
