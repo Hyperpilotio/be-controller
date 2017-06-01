@@ -28,7 +28,7 @@ class BlkioClassTestCase(unittest.TestCase):
         path_template = "kubepods/besteffort/pod{podId}/{contId}"
         return path_template.format(podId=v1pod.metadata.uid, contId=container_id)
 
-    def test_addBeCont(self):
+    def test_blkio(self):
         # add be cont
         
         self.blkio.addBeCont(self.cont_key)
