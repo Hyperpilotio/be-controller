@@ -24,9 +24,9 @@ class BlkioClassTestCase(unittest.TestCase):
     def tearDown(self):
         self.kubehelper.deleteDemoPods()
 
-    def generateContKey(self):
+    def generateContKey(self, v1pod, container_id):
         path_template = "kubepods/besteffort/pod{podId}/{contId}"
-        return path_template.format(podId=self.demoPod.metadata.uid, contId=self.cont_key)
+        return path_template.format(podId=v1pod.metadata.uid, contId=container_id)
 
     def test_addBeCont(self):
         # add be cont
