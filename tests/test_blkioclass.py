@@ -21,6 +21,7 @@ class BlkioClassTestCase(unittest.TestCase):
         print "set max read iops: {}, max write iops: {}".format(netst['max_rd_iops'], netst['max_wr_iops'])
         self.blkio = BlkioClass(netst['block_dev'], netst['max_rd_iops'], netst['max_wr_iops'])
         st.enabled = True
+        time.sleep(180)
 
     def tearDown(self):
         self.kubehelper.deleteDemoPods()
@@ -33,7 +34,6 @@ class BlkioClassTestCase(unittest.TestCase):
         # add be cont
         
         self.blkio.addBeCont(self.cont_key)
-        time.sleep(180)
         self.assertTrue(self.cont_key in self.blkio.keys, msg='container key not add to keys')
 
         # double add same container id
