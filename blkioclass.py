@@ -121,6 +121,7 @@ class BlkioClass(object):
     riop = 0
     wiop = 0
     for _ in lines:
+      print "throttle.io_serviced data: {}".format(_)
       if _.startswith(rpattern):
         riop = int(_.split()[2])
       if _.startswith(wpattern):
