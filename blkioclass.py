@@ -44,6 +44,7 @@ class BlkioClass(object):
     directory = '/sys/fs/cgroup/blkio/kubepods/besteffort/' + cont_key  
     if not os.path.isdir(directory):
       print 'Blkio:WARNING: Blkio not setup correctly for container (add): '+ cont_key
+      print "reason: path {} is dir: {}".format(directory, os.path.isdir(directory))
     self.keys.add(cont_key)
 
 
@@ -81,7 +82,6 @@ class BlkioClass(object):
          not os.path.isfile(rfile) or \
          not os.path.isfile(wfile):
         print 'Blkio:WARNING: Blkio not setup correctly for container (limit):'+ cont
-        print "reason: path {} is dir: {}, readfile {} exists {}, writefile {} exist {}".format(directory, os.path.isdir(directory), rfile, os.path.isfile(rfile), wfile, os.path.isfile(wfile))
         continue
       # throttle string
       rcmd = self.block_dev + ' ' + str(rlimit)
