@@ -11,7 +11,7 @@ class BlkioClassTestCase(unittest.TestCase):
         # create demo pod
         self.kubehelper = KubeHelper()
         self.demoPod = self.kubehelper.createDemoPod(BE=True)
-        self.cont_key = generateContKey(self.demoPod, self.demoPod.status.container_statuses[0].container_id)
+        self.cont_key = "kubepods/besteffort/pod{podId}/{contId}".format(podId=self.demoPod.metadata.uid, contId=self.demoPod.status.container_statuses[0].container_id)
         fileDir = os.path.dirname(os.path.realpath('__file__'))
         with open(os.path.join(fileDir, 'config.json'), 'r') as json_data_file:
             st.params = json.load(json_data_file)
