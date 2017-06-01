@@ -11,7 +11,7 @@ class BlkioClassTestCase(unittest.TestCase):
         # create demo pod
         self.kubehelper = KubeHelper()
         self.demoPod = self.kubehelper.createDemoPod(BE=True)
-        self.cont_key = self.demoPod.status.container_statuses[0].container_id
+        self.cont_key = generateContKey(self.demoPod, self.demoPod.status.container_statuses[0].container_id)
         fileDir = os.path.dirname(os.path.realpath('__file__'))
         with open(os.path.join(fileDir, 'config.json'), 'r') as json_data_file:
             st.params = json.load(json_data_file)
@@ -24,8 +24,13 @@ class BlkioClassTestCase(unittest.TestCase):
     def tearDown(self):
         self.kubehelper.deleteDemoPods()
 
+    def generateContKey(self):
+        path_template = "kubepods/besteffort/pod{podId}/{contId}"
+        return path_template.format(podId=self.demoPod.metadata.uid, contId=self.cont_key)
+
     def test_addBeCont(self):
         # add be cont
+        
         self.blkio.addBeCont(self.cont_key)
         self.assertTrue(self.cont_key in self.blkio.keys, msg='container key not add to keys')
 
