@@ -4,6 +4,7 @@ import json
 import settings as st
 import os
 from kube_helper import KubeHelper
+import time
 
 class BlkioClassTestCase(unittest.TestCase):
 
@@ -32,6 +33,7 @@ class BlkioClassTestCase(unittest.TestCase):
         # add be cont
         
         self.blkio.addBeCont(self.cont_key)
+        time.sleep(180)
         self.assertTrue(self.cont_key in self.blkio.keys, msg='container key not add to keys')
 
         # double add same container id
