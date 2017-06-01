@@ -41,7 +41,7 @@ class BlkioClass(object):
     if cont_key in self.keys:
       raise Exception('Duplicate blkio throttling request %s' % cont_key)
     # check if blockio is active
-    directory = '/sys/fs/cgroup/blkio/' + cont_key  
+    directory = '/sys/fs/cgroup/blkio/kubepods/besteffort/' + cont_key  
     if not os.path.isdir(directory):
       print 'Blkio:WARNING: Blkio not setup correctly for container (add): '+ cont_key
     self.keys.add(cont_key)
