@@ -39,12 +39,8 @@ class BlkioClassTestCase(unittest.TestCase):
         with self.assertRaises(Exception):
             self.blkio.addBeCont(self.cont_key)
 
-        # remove be cont
-        self.blkio.removeBeCont(self.cont_key)
-        self.assertFalse(self.cont_key in self.blkio.keys, msg='container key still remain in keys')
-
-
-    def test_setIopsLimit(self):
+    # test_setIopsLimit(self):
+        print "test setIopsLimit"
         riops = st.params['blkio_controller']['max_rd_iops']
         wiops = st.params['blkio_controller']['max_wr_iops']
         
@@ -66,3 +62,8 @@ class BlkioClassTestCase(unittest.TestCase):
         print "after clear iops limit: {}".format(_)
         self.assertIsNone(_[0], msg="riops not reset, got value: {}".format(_[0]))
         self.assertIsNone(_[1], msg="wiops not reset, got value: {}".format(_[1]))
+
+        # remove be cont
+        self.blkio.removeBeCont(self.cont_key)
+        self.assertFalse(self.cont_key in self.blkio.keys, msg='container key still remain in keys')
+
