@@ -4,7 +4,6 @@ import json
 import settings as st
 import os
 from kube_helper import KubeHelper
-import time
 
 class BlkioClassTestCase(unittest.TestCase):
 
@@ -46,20 +45,16 @@ class BlkioClassTestCase(unittest.TestCase):
         # set iops limit under limit
         self.blkio.setIopsLimit(riops * 0.8, wiops * 0.8)
 
-        # how to verify?
         iops = self.blkio.getIopUsed(self.cont_key)
         self.assertLessEqual(iops[0], riops, msg='riops still greater then upper limit')
         self.assertLessEqual(iops[1], wiops, msg='wiops still greater then upper limit')
 
-
         # set iops limit over limit
-        # with self.assertRaises(Exception):
-            # self.blkio.setIopsLimit(riops * 1.5, wiops * 1.5)
+        with self.assertRaises(Exception):
+            self.blkio.setIopsLimit(riops * 1.5, wiops * 1.5)
 
-    def test_getIopUsed(self):
-        self.blkio.getIopUsed(self.cont_key)
-        # how to verify...?
-
-    def test_clearIopsLimit(self):
+        # test clearIopsLimit
         self.blkio.clearIopsLimit()
-        # how to verify...?
+        _ = self.blkio.getIopUsed(self.cont_key)
+        self.assertIsNone(_[0], msg="riops not reset, got value: {}".format(_[0]))
+        self.assertIsNone(_[1], msg="wiops not reset, got value: {}".format(_[1]))

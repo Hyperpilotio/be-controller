@@ -103,7 +103,7 @@ class BlkioClass(object):
     wpattern = self.block_dev + ' Write'
 
     # check if directory and stats file exists
-    directory = '/sys/fs/cgroup/blkio/' + cont_key
+    directory = '/sys/fs/cgroup/blkio/kubepods/besteffort/' + cont_key
     if not os.path.isdir(directory):
       print 'Blkio:WARNING: Blkio not configured for container %s' %(cont_key)
       return 0, 0
@@ -131,7 +131,7 @@ class BlkioClass(object):
     """
     # set the limit for every container
     for cont in self.keys:
-      directory = '/sys/fs/cgroup/blkio/' + cont
+      directory = '/sys/fs/cgroup/blkio/kubepods/besteffort/' + cont
       rfile = directory + '/blkio.throttle.read_iops_device'
       wfile = directory + '/blkio.throttle.write_iops_device'
       if not os.path.isdir(directory) or \
