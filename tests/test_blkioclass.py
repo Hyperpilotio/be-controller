@@ -60,8 +60,8 @@ class BlkioClassTestCase(unittest.TestCase):
         self.blkio.clearIopsLimit()
         _ = self.blkio.getIopUsed(self.cont_key)
         print "after clear iops limit: {}".format(_)
-        self.assertIsNone(_[0], msg="riops not reset, got value: {}".format(_[0]))
-        self.assertIsNone(_[1], msg="wiops not reset, got value: {}".format(_[1]))
+        self.assertEqual(0, _[0], msg="riops not reset, got value: {}".format(_[0]))
+        self.assertIsNone(0, _[1], msg="wiops not reset, got value: {}".format(_[1]))
 
         # remove be cont
         self.blkio.removeBeCont(self.cont_key)
