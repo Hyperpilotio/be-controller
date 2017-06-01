@@ -23,7 +23,12 @@ class BlkioClassTestCase(unittest.TestCase):
         self.demoPod = self.kubehelper.createDemoPod(BE=True)
         
         # self.cont_key = "kubepods/besteffort/pod{podId}/{contId}".format(podId=self.demoPod.metadata.uid, contId=self.demoPod.status.container_statuses[0].container_id.strip("docker://"))
-        self.cont_key = GetBlkioPath(netst['blkio_path'], self.demoPod, self.demoPod.status.container_statuses[0].container_id.strip("docker://"))
+        pod = st.Pod()
+        pod.name = self.demoPod.metadata.name
+        pod.namespace = self.demoPod.metadata.namespace
+        pod.uid = self.demoPod.metadata.namespace
+        pod.qosclass = self.demoPod.status.qus_class.lower() if self.demoPod.status.qos_class != None else None
+        self.cont_key = GetBlkioPath(netst['blkio_path'], pod, self.demoPod.status.container_statuses[0].container_id.strip("docker://"))
 
 
     def tearDown(self):
