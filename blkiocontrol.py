@@ -19,6 +19,21 @@ import datetime as dt
 # hyperpilot imports
 import settings as st
 import blkioclass as blkioclass
+import os
+
+def GetBlkioPath(base_path, pod, container_id):
+  """
+  construct blkio path
+  Parameters:
+    pod: Pod instance
+    container_id: desire container
+  """
+  if pod.qosclass == 'guaranteed':
+    root = os.path.join(base_path, 'pod{}'.format(pod.uid), container_id)
+  else:
+    root = os.path.join(base_path, pod.qosclass.lower(), "pod{}".format(pod.uid), container_id)
+
+  return root
 
 def BlkioControll():
   """ Blkio controller
@@ -59,12 +74,13 @@ def BlkioControll():
     active_be_ids = set()
     st.active.lock.acquire_read()
     for _, pod in st.active.pods.items():
-      if pod.qosclass == 'guaranteed':
-        root = 'kubepods/' + 'pod' + pod.uid + '/'
-      else:
-        root = 'kubepods/' + pod.qosclass.lower() + '/pod' + pod.uid + '/'
+      # if pod.qosclass == 'guaranteed':
+      #   root = netst['blkio_path'] + 'pod' + pod.uid + '/'
+      # else:
+      #   root = netst['blkio_path'] + pod.qosclass.lower() + '/pod' + pod.uid + '/'
       for cont in pod.container_ids:
-        key = root + cont
+        # key = root + cont
+        key = getBlkioPath(netst['blkio_path'], pod, cont)
         active_ids.add(key)
         if pod.wclass == 'BE':
           active_be_ids.add(key)

@@ -1,5 +1,6 @@
 import unittest
 from blkioclass import BlkioClass
+from blkiocontrol import GetBlkioPath
 import json
 import settings as st
 import os
@@ -9,10 +10,6 @@ import time
 class BlkioClassTestCase(unittest.TestCase):
 
     def setUp(self):
-        # create demo pod
-        self.kubehelper = KubeHelper()
-        self.demoPod = self.kubehelper.createDemoPod(BE=True)
-        self.cont_key = "kubepods/besteffort/pod{podId}/{contId}".format(podId=self.demoPod.metadata.uid, contId=self.demoPod.status.container_statuses[0].container_id.strip("docker://"))
         fileDir = os.path.dirname(os.path.realpath('__file__'))
         with open(os.path.join(fileDir, 'config.json'), 'r') as json_data_file:
             st.params = json.load(json_data_file)
@@ -20,6 +17,14 @@ class BlkioClassTestCase(unittest.TestCase):
         print "set max read iops: {}, max write iops: {}".format(netst['max_rd_iops'], netst['max_wr_iops'])
         self.blkio = BlkioClass(netst['block_dev'], netst['max_rd_iops'], netst['max_wr_iops'])
         st.enabled = True
+
+        # create demo pod
+        self.kubehelper = KubeHelper()
+        self.demoPod = self.kubehelper.createDemoPod(BE=True)
+        
+        # self.cont_key = "kubepods/besteffort/pod{podId}/{contId}".format(podId=self.demoPod.metadata.uid, contId=self.demoPod.status.container_statuses[0].container_id.strip("docker://"))
+        self.cont_key = GetBlkioPath(netst['blkio_path'], self.demoPod, self.demoPod.status.container_statuses[0].container_id.strip("docker://"))
+
 
     def tearDown(self):
         self.kubehelper.deleteDemoPods()

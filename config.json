@@ -40,7 +40,8 @@
       "max_rd_iops": 1500,
       "hp_iops": 1000,
       "disabled": false,
-      "write_metrics": true
+      "write_metrics": true,
+      "blkio_path": "kubepods/"
     }, 
     "write_metrics": true
 }

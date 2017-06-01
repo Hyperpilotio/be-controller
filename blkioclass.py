@@ -41,7 +41,7 @@ class BlkioClass(object):
     if cont_key in self.keys:
       raise Exception('Duplicate blkio throttling request %s' % cont_key)
     # check if blockio is active
-    directory = '/sys/fs/cgroup/blkio/' + cont_key  
+    directory = '/sys/fs/cgroup/blkio/' + cont_key
     if not os.path.isdir(directory):
       print 'Blkio:WARNING: Blkio not setup correctly for container (add): '+ cont_key
     self.keys.add(cont_key)
@@ -62,10 +62,6 @@ class BlkioClass(object):
     if len(self.keys) == 0:
       return
 
-    print "max_rd_iops is {}".format(self.max_rd_iops)
-    print "max_wr_iops is {}".format(self.max_wr_iops)
-    print "request riops is {}, larger than max: {}".format(riops, riops > self.max_rd_iops)
-    print "request wiops is {}, larger than max: {}".format(wiops, wiops > self.max_wr_iops)
     if riops > self.max_rd_iops:
       raise Exception('Blkio rd limit ' + riops + ' is higher than max iops ' + self.max_rd_iops)
     if wiops > self.max_wr_iops:
@@ -84,7 +80,7 @@ class BlkioClass(object):
       if not os.path.isdir(directory) or \
          not os.path.isfile(rfile) or \
          not os.path.isfile(wfile):
-        print 'Blkio:WARNING: Blkio not setup correctly for container (limit):'+ cont
+        print 'Blkio:WARNING: Blkio not setup correctly for container (limit): '+ cont
         continue
       # throttle string
       rcmd = self.block_dev + ' ' + str(rlimit)
