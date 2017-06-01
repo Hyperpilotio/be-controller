@@ -26,8 +26,6 @@ class BlkioClassTestCase(unittest.TestCase):
 
     def test_addBeCont(self):
         # add be cont
-        print "sleep 600s for debug"
-        time.sleep(600)
         self.blkio.addBeCont(self.cont_key)
         self.assertTrue(self.cont_key in self.blkio.keys, msg='container key not add to keys')
 
