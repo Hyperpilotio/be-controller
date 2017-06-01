@@ -27,7 +27,7 @@ class BlkioClassTestCase(unittest.TestCase):
         pod.name = self.demoPod.metadata.name
         pod.namespace = self.demoPod.metadata.namespace
         pod.uid = self.demoPod.metadata.namespace
-        pod.qosclass = self.demoPod.status.qus_class.lower() if self.demoPod.status.qos_class != None else None
+        pod.qosclass = self.demoPod.status.qos_class.lower() if self.demoPod.status.qos_class != None else None
         self.cont_key = GetBlkioPath(netst['blkio_path'], pod, self.demoPod.status.container_statuses[0].container_id.strip("docker://"))
 
 
