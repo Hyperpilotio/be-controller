@@ -16,12 +16,10 @@ class BlkioClassTestCase(unittest.TestCase):
         fileDir = os.path.dirname(os.path.realpath('__file__'))
         with open(os.path.join(fileDir, 'config.json'), 'r') as json_data_file:
             st.params = json.load(json_data_file)
-
         netst = st.params['blkio_controller']
         print "set max read iops: {}, max write iops: {}".format(netst['max_rd_iops'], netst['max_wr_iops'])
         self.blkio = BlkioClass(netst['block_dev'], netst['max_rd_iops'], netst['max_wr_iops'])
         st.enabled = True
-        time.sleep(180)
 
     def tearDown(self):
         self.kubehelper.deleteDemoPods()
