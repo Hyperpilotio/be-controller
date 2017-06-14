@@ -202,6 +202,15 @@ def SetQuotaBE(quota):
           print "Main: CPU quota of BE container set to %d" % (cont.quota)
         except docker.errors.APIError as e:
           print "Main:WARNING: Cannot update quota for container %s: %s" % (str(cont), e)
+        # special case for disabling quota
+        if quota == 0:
+          cont.period = 0
+          try:
+            cont.docker.update(cpu_period=cont.period)
+            print "Main: CPU quota of BE container set to %d" % (cont.period)
+          except docker.errors.APIError as e:
+            print "Main:WARNING: Cannot update quota for container %s: %s" % (str(cont), e)
+          
 
 
 def ResetBE():
@@ -440,9 +449,11 @@ def __init__():
 
     # reset max quota  if the controller is turned off
     if old_enabled and not st.enabled:
-      SetQuotaBE(max_be_quota)
+      print "Main: Controller off, turning off quota"
+      SetQuotaBE(0)
     # set min quota if the controller is tuned on
     if st.enabled and not old_enabled:
+      print "Main: Controller off, setting quota to min"
       SetQuotaBE(min_be_quota)
 
     if not st.enabled:

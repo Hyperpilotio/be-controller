@@ -77,13 +77,14 @@ def NetControll():
     bw_usage = net.getBwStats()
     if 1 in bw_usage and 10 in bw_usage:
       total_bw = bw_usage[1]
-      hp_bw = bw_usage[1] - bw_usage[10]
+      be_bw = bw_usage[10]
+      hp_bw = bw_usage[1] - be_bw
       if hp_bw < 0.0:
         hp_bw = 0.0
-      be_bw = net.max_bw_mbps - hp_bw - max(0.05*net.max_bw_mbps, 0.10*hp_bw)
-      if be_bw < 0.0:
-        be_bw = 0.0
-      net.setBwLimit(be_bw)
+      be_limit = net.max_bw_mbps - hp_bw - max(0.05*net.max_bw_mbps, 0.10*hp_bw)
+      if be_limit < 0.0:
+        be_limit = 0.0
+      net.setBwLimit(be_limit)
     elif st.verbose:
       print "Net:WARNING: Net stats lost, bw_usage: " + str(bw_usage)
 
@@ -91,7 +92,8 @@ def NetControll():
         "cycle": cycle,
         "total_bw": total_bw,
         "hp_bw": hp_bw,
-        "be_bw": be_bw
+        "be_bw": be_bw,
+        "be_limit": limit
     }
 
     at = dt.now().strftime('%H:%M:%S')
