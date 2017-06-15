@@ -2,9 +2,11 @@
 Network utilies class
 
 Current assumptions:
-- Manual entry of max throughput possible
+- Manual entry of max throughput
 - Each BE container has their own IP address
 - Not managing bursts for now
+- Using tc (htb) + iptables for outgoing traffic
+- Using tc (cbq) for incoming traffic
 
 """
 
