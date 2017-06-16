@@ -29,6 +29,7 @@ class NetClass(object):
         http://lartc.org/howto/lartc.qdisc.filters.html
       - Common iptables commands
         http://www.thegeekstuff.com/2011/06/iptables-rules-examples
+      - http://lartc.org/howto/lartc.ratelimit.single.html
   """
   def __init__(self, iface_ext, iface_cont, max_bw_mbps, link_bw_mbps, ctlloc):
     self.iface_ext = iface_ext
@@ -46,10 +47,8 @@ class NetClass(object):
 
     # make sure HTB is in a reasonable state to begin with
     self.cc.run_command('tc qdisc del dev %s root' % self.iface_ext)
-
     # replace root qdisc with HTB
     # need to disable/enable HTB to get the stats working
-
     success = self.cc.run_commands([
         'tc qdisc add dev %s root handle 1: htb default 1' % self.iface_ext,
         'echo 1 > /sys/module/sch_htb/parameters/htb_rate_est',
@@ -61,9 +60,19 @@ class NetClass(object):
                         % (self.iface_ext, self.max_bw_mbps, self.max_bw_mbps),
         'tc filter add dev %s parent 1: protocol all prio 10 handle %d fw flowid 1:10' \
                         % (self.iface_ext, self.mark)])
-
     if not success:
       raise Exception('Could not setup htb qdisc')
+
+    # make sure CBQ is in a reasonable state to begin with
+    self.cc.run_command('tc qdisc del dev %s root' % self.iface_cont)
+    # replace root qdisc with CBQ
+    success = self.cc.run_commands([
+        'tc qdisc replace dev %s root handle 2: cbq avpkt 1000 bandwidth %dmbit' \
+            % (self.iface_cont, self.link_bw_mbps),
+	    'tc class replace dev %s parent 2: classid 2:1 cbq rate %dmbit allot 1500 prio 5 bounded isolated' \
+            % (self.iface_cont, self.ingress_limit_mbps)])
+    if not success:
+      raise Exception('Could not setup cbq qdisc')
 
 
   def addIPtoFilter(self, cont_ip):
@@ -73,10 +82,16 @@ class NetClass(object):
       raise Exception('Duplicate filter for IP %s' % cont_ip)
     self.cont_ips.add(cont_ip)
 
+    # egress
     _, err = self.cc.run_command('iptables -t mangle -A PREROUTING -i %s -s %s -j MARK --set-mark %d' \
                                % (self.iface_cont, cont_ip, self.mark))
     if err:
       raise Exception('Could not add iptable filter for %s: %s' % (cont_ip, err))
+    # ingress
+    _, err = self.cc.run_command('tc filter add dev %s parent 2: protocol ip prio 16 u32 match ip dst %s flowid 2:1' \
+                               % (self.iface_cont, cont_ip))
+    if err:
+      raise Exception('Could not add cbq filter for %s: %s' % (cont_ip, err))
 
 
   def removeIPfromFilter(self, cont_ip):
@@ -86,64 +101,32 @@ class NetClass(object):
       raise Exception('Not existing filter for %s' % cont_ip)
     self.cont_ips.remove(cont_ip)
 
+    #egress
     _, err = self.cc.run_command('iptables -t mangle -D PREROUTING -i %s -s %s -j MARK --set-mark %d' \
                                % (self.iface_cont, cont_ip, self.mark))
     if err:
-      raise Exception('Could not add iptable filter for %s: %s' % (cont_ip, err))
+      raise Exception('Could not remove iptable filter for %s: %s' % (cont_ip, err))
+    #ingress
+    _, err = self.cc.run_command('tc filter del dev %s prio 16' % (self.iface_cont))
+    if err:
+      raise Exception('Could not remove cbq filter for %s: %s' % (cont_ip, err))
 
 
-  def setBwLimit(self, bw_mbps):
+  def setEgressBwLimit(self, bw_mbps):
     # replace always work for tc filter
-
     _, err = self.cc.run_command('tc class replace dev %s parent 1: classid 1:10 htb rate %dmbit ceil %dmbit' \
                                % (self.iface_ext, bw_mbps, bw_mbps))
     if err:
       raise Exception('Could not change htb class rate: ' + err)
 
+  def setIngressBwLimit(self, bw_mbps):
+    # ingress
+    _, err = self.cc.run_command('tc class replace dev %s parent 2: classid 2:1 cbq rate %dmbit \
+	                                 allot 1500 prio 5 bounded isolated ' \
+                               % (self.iface_cont, bw_mbps))
+    if err:
+      raise Exception('Could not change cbq class rate: ' + err)
 
-  def getBwStatsBlocking(self):
-    """Performs a blocking read to get one second averaged bandwidth statistics
-    """
-    # helper method to get stats from tc
-    def read_tc_stats():
-      text, err = self.cc.run_command('tc -s class show dev %s' % self.iface_ext)
-      if err:
-        raise Exception("Unable to get tc stats for %s: %s" % (self.iface_ext, err))
-
-      """Example format to parse. For some reason rate and pps are always 0...
-      class htb 1:1 root prio 0 rate 10000Mbit ceil 10000Mbit burst 0b cburst 0b
-       Sent 108 bytes 2 pkt (dropped 0, overlimits 0 requeues 0)
-       rate 0bit 0pps backlog 0b 0p requeues 0
-       lended: 2 borrowed: 0 giants: 0
-       tokens: 14 ctokens: 14
-
-      class htb 1:2 root prio 0 rate 1000Mbit ceil 1000Mbit burst 1375b cburst 1375b
-       Sent 1253014380 bytes 827622 pkt (dropped 0, overlimits 0 requeues 0)
-       rate 0bit 0pps backlog 0b 0p requeues 0
-       lended: 18460 borrowed: 0 giants: 0
-       tokens: -47 ctokens: -47
-      """
-      results = {}
-      for _ in re.finditer('class htb 1:(?P<cls>\d+).*?\n.*?Sent (?P<bytes>\d+) bytes', text, re.DOTALL):
-        cls = int(_.group('cls'))
-        bytes = int(_.group('bytes'))
-        results[cls] = 8.0*bytes/1000/1000 # convert to mbps
-
-      return results
-
-    # read stats from tc
-    starting_value = read_tc_stats()
-    starting_time = dt.datetime.now()
-    time.sleep(1)
-    ending_value = read_tc_stats()
-    ending_time = dt.datetime.now()
-
-    # take the difference to find the average
-    elapsed_time = (ending_time - starting_time).total_seconds()
-    results = {}
-    for _ in dict.iterkeys():
-      results[_] = float(ending_value[_] - starting_value[_]/elapsed_time)
-    return results
 
   @staticmethod
   def parseBwStats(text):
@@ -159,8 +142,9 @@ class NetClass(object):
       results[cls] = float(int(rate) / (1000000.0)) # convert to mbps
     return results
 
-  def getBwStats(self):
-    """Performs a non-blocking read averaged bandwidth statistics
+
+  def getEgressBwStats(self):
+    """Performs a non-blocking read for averaged bandwidth statistics
     """
     text, err = self.cc.run_command('tc -s class show dev %s' % self.iface_ext)
     if err:
@@ -180,5 +164,33 @@ class NetClass(object):
       lended: 18460 borrowed: 0 giants: 0
       tokens: -47 ctokens: -47
     """
-
     return NetClass.parseBwStats(text)
+
+
+  def getIngressBytesStats(self):
+    """Performs a non blocking read to bytes statistics for ingress
+    """
+    # helper method to get stats from tc
+    def read_tc_stats():
+      text, err = self.cc.run_command('tc -s class show dev %s' % self.iface_cont)
+      if err:
+        raise Exception("Unable to get tc stats for %s: %s" % (self.iface_cont, err))
+
+      """Example format to parse.
+         class cbq 2: root rate 1Gbit (bounded,isolated) prio no-transmit
+          Sent 71472933340 bytes 11208948 pkt (dropped 0, overlimits 0 requeues 0) 
+          backlog 0b 0p requeues 0 
+           borrowed 0 overactions 0 avgidle 125 undertime 0
+         class cbq 2:1 parent 2: rate 50Mbit (bounded,isolated) prio 5
+          Sent 28586400957 bytes 7576847 pkt (dropped 2309, overlimits 15156382 requeues 0) 
+          backlog 0b 0p requeues 0 
+           borrowed 0 overactions 6378134 avgidle -5382 undertime 1.22595e+09      """
+      be_bytes = 0
+      total_bytes = 0
+      for _ in re.finditer('class cbq 2:(?P<cls>\d+).*?\n.*?Sent (?P<bytes>\d+) bytes', text, re.DOTALL):
+        if _.group('cls') == '10':
+          be_bytes = int(_.group('bytes'))
+        else:
+          total_bytes = int(_.group('bytes'))
+      # convert to mbit before returning
+      return (8.0*be_bytes/1000/1000, 8.0*total_bytes/1000/1000)
