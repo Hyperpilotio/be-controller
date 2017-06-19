@@ -214,8 +214,8 @@ class NetClass(object):
       if re.search(self.iface_ext, line):
         words = line.split()
         return int(words[1]), int(words[9])
-      else:
-        return 0, 0
+    # default case, no stats
+    return 0, 0
 
 
   def currentStats(self):
