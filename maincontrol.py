@@ -429,21 +429,20 @@ def __init__():
     _.start()
   except threading.ThreadError:
     print "Main:WARNING: Cannot start network controller; continuing without it"
-  if st.verbose:
-    print "Main: Starting blkio controller"
-  try:
-    _ = threading.Thread(name='BlkioControll', target=blkio.BlkioControll)
-    _.setDaemon(True)
-    _.start()
-  except threading.ThreadError:
-    print "Main:WARNING: Cannot start blkio controller; continuing without it"
+  #if st.verbose:
+  #  print "Main: Starting blkio controller"
+  #try:
+  #  _ = threading.Thread(name='BlkioControll', target=blkio.BlkioControll)
+  #  _.setDaemon(True)
+  #  _.start()
+  #except threading.ThreadError:
+  #  print "Main:WARNING: Cannot start blkio controller; continuing without it"
 
 
   # control loop
   cycle = 0
   while 1:
 
-    
     old_enabled = st.enabled
     st.enabled = ControllerEnabled()
 
@@ -460,6 +459,8 @@ def __init__():
       print "Main:WARNING: BE Controller is disabled, skipping main control"
       time.sleep(period)
       continue
+    # temp please remote
+    continue 
 
     if st.get_param('disabled', 'quota_controller', False) is True:
       print "Main:WARNING: CPU controller is disabled"

@@ -24,7 +24,8 @@
       "link_bw_mbps" : 10000,
       "max_bw_mbps" : 700,
       "disabled": false,
-      "write_metrics": true
+      "write_metrics": true, 
+      "default_limit_mbps": 100
     },
     "blkio_controller": {
       "blkio_period": 2,
