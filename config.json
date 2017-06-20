@@ -10,7 +10,7 @@
       "load_threshold_shrink": 75.0,
       "load_threshold_grow": 60.0,
       "min_shares": 2,
-      "max_be_quota": 0.4,
+      "max_be_quota": 0.7,
       "min_be_quota": 0.05,
       "BE_growth_ratio": 0.1,
       "BE_shrink_ratio": 1.0,

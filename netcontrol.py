@@ -91,8 +91,6 @@ def NetControll():
       be_egress_limit = netst['default_limit_mbps']
 
     # enforce limits
-    print "LALA"
-    print be_egress_limit, be_ingress_limit
     net.setEgressBwLimit(int(be_egress_limit))
     net.setIngressBwLimit(int(be_ingress_limit))
 
