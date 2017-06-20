@@ -85,12 +85,14 @@ def NetControll():
       max(0.05*net.max_bw_mbps, 0.10*ingress_hp_mbps)
     be_egress_limit = net.max_bw_mbps - egress_hp_mbps - \
       max(0.05*net.max_bw_mbps, 0.10*egress_hp_mbps)
-    if be_ingress_limit < 0:
-      be_ingress_limit = 0
-    if be_egress_limit < 0:
-      be_egress_limit = 0
+    if be_ingress_limit < netst['default_limit_mbps']:
+      be_ingress_limit = netst['default_limit_mbps']
+    if be_egress_limit < netst['default_limit_mbps']:
+      be_egress_limit = netst['default_limit_mbps']
 
     # enforce limits
+    print "LALA"
+    print be_egress_limit, be_ingress_limit
     net.setEgressBwLimit(int(be_egress_limit))
     net.setIngressBwLimit(int(be_ingress_limit))
 
