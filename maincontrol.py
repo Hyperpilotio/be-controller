@@ -443,7 +443,6 @@ def __init__():
   cycle = 0
   while 1:
 
-    
     old_enabled = st.enabled
     st.enabled = ControllerEnabled()
 

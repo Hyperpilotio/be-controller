@@ -30,11 +30,11 @@ def NetControll():
            % (netst['iface_ext'], netst['iface_cont'], netst['max_bw_mbps'], netst['link_bw_mbps'])
   net = netclass.NetClass(netst['iface_ext'], netst['iface_cont'], \
                           netst['max_bw_mbps'], netst['link_bw_mbps'], \
-                          st.params['ctlloc'])
+                          netst['default_limit_mbps'], st.params['ctlloc'])
   period = netst['period']
   cycle = 0
   was_enabled = False
-  
+
   # control loop
   while 1:
 
@@ -57,7 +57,7 @@ def NetControll():
       continue
 
     was_enabled = True
-    
+
     # get IP of all active BE containers
     active_be_ips = set()
     st.active.lock.acquire_read()
@@ -74,34 +74,47 @@ def NetControll():
       net.removeIPfromFilter(_)
 
     # actual controller
-    bw_usage = net.getBwStats()
-    if 1 in bw_usage and 10 in bw_usage:
-      total_bw = bw_usage[1]
-      be_bw = bw_usage[10]
-      hp_bw = bw_usage[1] - be_bw
-      if hp_bw < 0.0:
-        hp_bw = 0.0
-      be_limit = net.max_bw_mbps - hp_bw - max(0.05*net.max_bw_mbps, 0.10*hp_bw)
-      if be_limit < 0.0:
-        be_limit = 0.0
-      net.setBwLimit(be_limit)
-    elif st.verbose:
-      print "Net:WARNING: Net stats lost, bw_usage: " + str(bw_usage)
+
+    # get stats, calculate new limits, do sanity checks
+    ingress_total_mbps, ingress_be_mbps, egress_total_mbps, egress_be_mbps = \
+      net.currentStats()
+    ingress_hp_mbps = ingress_total_mbps - ingress_be_mbps
+    egress_hp_mbps = egress_total_mbps - egress_be_mbps
+
+    be_ingress_limit = net.max_bw_mbps - ingress_hp_mbps - \
+      max(0.05*net.max_bw_mbps, 0.10*ingress_hp_mbps)
+    be_egress_limit = net.max_bw_mbps - egress_hp_mbps - \
+      max(0.05*net.max_bw_mbps, 0.10*egress_hp_mbps)
+    if be_ingress_limit < netst['default_limit_mbps']:
+      be_ingress_limit = netst['default_limit_mbps']
+    if be_egress_limit < netst['default_limit_mbps']:
+      be_egress_limit = netst['default_limit_mbps']
+
+    # enforce limits
+    net.setEgressBwLimit(int(be_egress_limit))
+    net.setIngressBwLimit(int(be_ingress_limit))
 
     net_cycle_data = {
         "cycle": cycle,
-        "total_bw": total_bw,
-        "hp_bw": hp_bw,
-        "be_bw": be_bw,
-        "be_limit": limit
+        "total_egress_bw": egress_total_mbps,
+        "hp_egress_bw": egress_hp_mbps,
+        "be_egress_bw": egress_be_mbps,
+        "be_egress_limit": be_egress_limit,
+        "total_ingress_bw": ingress_total_mbps,
+        "hp_ingress_bw": ingress_hp_mbps,
+        "be_ingress_bw": ingress_be_mbps,
+        "be_ingress_limit": be_ingress_limit,
     }
 
     at = dt.now().strftime('%H:%M:%S')
 
     # loop
     if st.verbose:
-      print "Net: Net controller cycle", cycle, "at", at,
-      print "Net:   BW: %f (Total used) %f (HP used), %f (BE alloc)" %(total_bw, hp_bw, be_bw)
+      print "Net: Net controller cycle", cycle, "at", at
+      print "Net:   Egress  BW: %.2f (Total) %.2f (HP), %.2f (BE), %.2f (BE alloc)" \
+        %(egress_total_mbps, egress_hp_mbps, egress_be_mbps, be_egress_limit)
+      print "Net:   Ingress BW: %.2f (Total) %.2f (HP), %.2f (BE), %.2f (BE alloc)" \
+        %(ingress_total_mbps, ingress_hp_mbps, ingress_be_mbps, be_ingress_limit)
 
     if st.get_param('write_metrics', 'net_controller', False) is True:
       st.stats_writer.write(at, st.node.name, "net", net_cycle_data)
