@@ -204,10 +204,10 @@ def SetQuotaBE(quota):
           print "Main:WARNING: Cannot update quota for container %s: %s" % (str(cont), e)
         # special case for disabling quota
         if quota == 0:
-          cont.period = 0
+          cont.quota = st.node.cpu * 100000
           try:
-            cont.docker.update(cpu_period=cont.period)
-            print "Main: CPU quota of BE container set to %d" % (cont.period)
+            cont.docker.update(cpu_quota=cont.quota)
+            print "Main: CPU quota of BE container set to %d" % (cont.quota)
           except docker.errors.APIError as e:
             print "Main:WARNING: Cannot update quota for container %s: %s" % (str(cont), e)
           

@@ -96,14 +96,14 @@ def NetControll():
 
     net_cycle_data = {
         "cycle": cycle,
-        "total_egress_bw": egress_total_mbps,
-        "hp_egress_bw": egress_hp_mbps,
-        "be_egress_bw": egress_be_mbps,
-        "be_egress_limit": be_egress_limit,
-        "total_ingress_bw": ingress_total_mbps,
-        "hp_ingress_bw": ingress_hp_mbps,
-        "be_ingress_bw": ingress_be_mbps,
-        "be_ingress_limit": be_ingress_limit,
+        "total_egress_bw": int(egress_total_mbps),
+        "hp_egress_bw": int(egress_hp_mbps),
+        "be_egress_bw": int(egress_be_mbps),
+        "be_egress_limit": int(be_egress_limit),
+        "total_ingress_bw": int(ingress_total_mbps),
+        "hp_ingress_bw": int(ingress_hp_mbps),
+        "be_ingress_bw": int(ingress_be_mbps),
+        "be_ingress_limit": int(be_ingress_limit),
     }
 
     at = dt.now().strftime('%H:%M:%S')
