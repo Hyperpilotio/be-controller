@@ -7,13 +7,13 @@
       "slack_threshold_reset": -0.1,
       "slack_threshold_shrink": 0.1,
       "slack_threshold_grow": 0.2,
-      "load_threshold_shrink": 75.0,
-      "load_threshold_grow": 60.0,
+      "load_threshold_shrink": 80.0,
+      "load_threshold_grow": 70.0,
       "min_shares": 2,
       "max_be_quota": 0.7,
       "min_be_quota": 0.05,
       "BE_growth_ratio": 0.1,
-      "BE_shrink_ratio": 1.0,
+      "BE_shrink_ratio": 1.5,
       "disabled": false,
       "write_metrics": true
     },
@@ -22,10 +22,10 @@
       "iface_ext": "ens3",
       "iface_cont": "weave",
       "link_bw_mbps" : 10000,
-      "max_bw_mbps" : 650,
+      "max_bw_mbps" : 600,
       "disabled": false,
       "write_metrics": true, 
-      "default_limit_mbps": 30
+      "default_limit_mbps": 10
     },
     "blkio_controller": {
       "blkio_period": 2,
