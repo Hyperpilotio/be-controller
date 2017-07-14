@@ -81,11 +81,11 @@ def CpuStatsK8S():
 def CpuStats():
   """ Calculates CPU usage statistics
   """
-  if st.k8sOn:
-    return CpuStatsK8S()
-  else:
-    return CpuStatsDocker()
-
+  #if st.k8sOn:
+  #  return CpuStatsK8S()
+  #else:
+  #  return CpuStatsDocker()
+  return st.node.GetCpuLoad()
 
 def SloSlackFile():
   """ Read SLO slack from local file
@@ -210,7 +210,7 @@ def SetQuotaBE(quota):
             print "Main: CPU quota of BE container set to %d" % (cont.quota)
           except docker.errors.APIError as e:
             print "Main:WARNING: Cannot update quota for container %s: %s" % (str(cont), e)
-          
+
 
 
 def ResetBE():

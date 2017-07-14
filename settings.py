@@ -12,6 +12,7 @@ import docker
 from kubernetes import watch
 import rwlock
 import store
+import command_client as cc
 
 class Container(object):
   """ A class for tracking active containers
@@ -145,17 +146,49 @@ class ActivePods(object):
 class NodeInfo(object):
   """ A class for tracking node stats
   """
-  def __init__(self):
+  def __init__(self, ctlloc):
     # config
     self.cpu = 0
     self.name = ''
     self.qos_app = ''
     self.kenv = None
     self.denv = None
+    self.cc = cc.CommandClient(ctlloc)
     # stats
     self.hp_cpu_percent = 0
     self.be_cpu_percent = 0
     self.be_quota = 0
+    self.cpuload = 0
+    # temp
+    self.PrevTotal = 0
+    self.PrevIdle = 0
+
+  def GetCpuLoad(self):
+    """ Return CPU load (0-100.0)
+    """
+    # Read /proc/stat
+    out, err = self.cc.run_command('cat /proc/stat')
+    if err:
+      raise Exception('Cannot access /proc/stat')
+    # extract fields for overall CPU
+    lines = out.split('\n')
+    cpu_line = lines[0].split()
+    if cpu_line[0] != 'cpu':
+      raise Exception('Cannot parse /proc/stat')
+    cpu_line = [cpu_line[0]]+[float(i) for i in cpu_line[1:]]#type casting
+    cpu_id, user, nice, system, idle, iowait, irq, softrig, steal, guest, guest_nice = cpu_line
+    Idle = idle + iowait
+    NonIdle = user + nice + system + irq + softrig + steal
+    Total = Idle + NonIdle
+    # calculate CPU load
+    self.cpuload = (((Total-self.PrevTotal)-(Idle-self.PrevIdle)) / (Total-self.PrevTotal))*100
+    if self.cpuload < 0.0:
+      self.cpuload = 0.0
+    if self.cpuload > 100.0:
+      self.cpuload = 100.0
+    self.PrevTotal = Total
+    self.PrevIdle = Idle
+    return self.cpuload
 
 
 def ExtractWClass(item):
@@ -189,7 +222,7 @@ def get_param(name, section=None, default=None):
 # all active containers and pods
 active = ActivePods()
 # node info
-node = NodeInfo()
+node = NodeInfo('in')
 # stats writer
 stats_writer = store.InfluxWriter()
 

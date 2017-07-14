@@ -75,7 +75,7 @@ class NetClass(object):
         'tc qdisc replace dev %s root handle 2: cbq avpkt 1000 bandwidth %dmbit' \
             % (self.iface_cont, self.link_bw_mbps),
    	    'tc class replace dev %s parent 2: classid 2:10 cbq rate %dmbit allot 1500 prio 5 bounded isolated'\
-            % (self.iface_cont, self.default_limit_mbps)])
+            % (self.iface_cont, self.link_bw_mbps)])
     if not success:
       raise Exception('Could not setup cbq qdisc')
 
