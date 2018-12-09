@@ -15,7 +15,7 @@
       "BE_growth_ratio": 0.5,
       "BE_shrink_ratio": 3.0,
       "disabled": false,
-      "write_metrics": true
+      "write_metrics": false
     },
     "net_controller": {
       "period": 2,
@@ -24,7 +24,7 @@
       "link_bw_mbps" : 10000,
       "max_bw_mbps" : 650,
       "disabled": false,
-      "write_metrics": true, 
+      "write_metrics": false,
       "default_limit_mbps": 30
     },
     "blkio_controller": {
@@ -34,7 +34,7 @@
       "max_rd_iops": 1500,
       "hp_iops": 1000,
       "disabled": false,
-      "write_metrics": true
-    }, 
-    "write_metrics": true
+      "write_metrics": false
+    },
+    "write_metrics": false
 }

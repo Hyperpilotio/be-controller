@@ -380,9 +380,9 @@ def __init__():
 
   # parse arguments
   st.params = ParseArgs()
-  st.stats_writer = store.InfluxWriter()
 
   if st.get_param("write_metrics", None, False) is True:
+    st.stats_writer = store.InfluxWriter()
     # flatten the setting params
     stored_params = {}
     for key, val in st.params.items():
